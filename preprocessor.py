@@ -1,4 +1,4 @@
-import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, glove, itertools
+import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, glove, itertools, pprint
 import cPickle as pickle
 import numpy as np
 from nltk.corpus import stopwords,wordnet
@@ -91,23 +91,53 @@ class ACMDL_DocReader(object):
 						except KeyError:
 							self.cooccurrence[wk][wk2] = 1.0
 
-def eval_document_surprise_matrix(doc,model):
+def extract_document_cooccurrence_matrix(doc, coocurrence):
+	cooc_mat = np.zeros([len(doc),len(doc)])
+	for i1,i2 in itertools.combinations(range(len(doc)),2):
+		d1 = doc[i1][0]
+		d2 = doc[i2][0]
+		cooc_mat[i1,i2] = coocurrence[d1][d2]
+	return cooc_mat
+
+def eval_document_surprise_matrix(doc, model, cooccurrence):
 	surp_mat = np.zeros([len(doc),len(doc)])
 	for i1,i2 in itertools.combinations(range(len(doc)),2):
-		surp_mat[i1,i2] = np.dot(model.W[doc[i1][0]],model.W[doc[i2][0]])
+		d1 = doc[i1][0]
+		d2 = doc[i2][0]
+		# take dot product of vectors
+		surp_mat[i1,i2] = np.dot(model.W[d1],model.ContextW[d2]) + model.b[d1] + model.ContextB[d2]
+		# correct for the rare feature scaling described in https://nlp.stanford.edu/pubs/glove.pdf
+		if cooccurrence[d1][d2] < model.x_max:
+			surp_mat[i1,i2] *= 1.0/pow(cooccurrence[d1][d2] / model.x_max,model.alpha)
 	return surp_mat
 
 if __name__ == "__main__":
 	inputfile = sys.argv[1]
 	acm = ACMDL_DocReader(inputfile)
 	acm.preprocess(no_below=0.0001, no_above=1)
-	model = glove.Glove(acm.cooccurrence, d=500, alpha=0.75, x_max=100.0)
+	model = glove.Glove(acm.cooccurrence, d=500, alpha=0.75, x_max=10.0)
 	logger.info(" ** Training GloVe")
 	init_step_size = 0.1
 	step_size_decay = 10
-	for epoch in range(100):
+	doc = acm.documents[0]
+	for epoch in range(20):
 		err = model.train(workers=multiprocessing.cpu_count() - 2, batch_size=1000, step_size=init_step_size/(1+epoch/step_size_decay))
 		logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
-	print model.W[acm.dictionary.token2id["computer"]]
+		surp_mat = eval_document_surprise_matrix(acm.documents[0],model,acm.cooccurrence)
+		cooc_mat = extract_document_cooccurrence_matrix(acm.documents[0],acm.cooccurrence)
+		print "Surprise Matrix - log(Cooccurrence Matrix)"
+		print np.array_str(np.subtract(surp_mat,np.log(cooc_mat)),max_line_width=200)
+	#print model.W[acm.dictionary.token2id["computer"]]
 
-	print eval_document_surprise_matrix(acm.documents[0],model)
+'''
+	surp_mat = eval_document_surprise_matrix(acm.documents[0],model,acm.cooccurrence)
+	print "Surprise Matrix"
+	print np.array_str(surp_mat,max_line_width=200)
+	cooc_mat = extract_document_cooccurrence_matrix(acm.documents[0],acm.cooccurrence)
+	print "Cooccurrence Matrix"
+	print np.array_str(cooc_mat,max_line_width=200)
+	print "Surprise Matrix - Cooccurrence Matrix"
+	print np.array_str(np.subtract(surp_mat,cooc_mat),max_line_width=200)
+	print "Surprise Matrix - log(Cooccurrence Matrix)"
+	print np.array_str(np.subtract(surp_mat,np.log(cooc_mat)),max_line_width=200)
+	'''

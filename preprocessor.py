@@ -53,14 +53,14 @@ class ACMDL_DocReader(object):
 				yield docwords
 		self.first_pass = False
 
-	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, keep_n=None):
-		preprocessed_path = self.filepath+"_below"+str(no_below)+"_above"+str(no_above)+"_keep"+str(keep_n)+suffix
+	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5):
+		preprocessed_path = self.filepath+"_below"+str(no_below)+"_above"+str(no_above)+suffix
 		if not os.path.exists(preprocessed_path):
 			logger.info(" ** Pre-processing started.")
 			self.dictionary = gensim.corpora.Dictionary(self)
 			self.word_occurrence = {k:0.0 for k in self.dictionary.token2id.keys()}
 			logger.info("   **** Dictionary created.")
-			self.dictionary.filter_extremes(no_below=max(2,no_below*self.total_docs),no_above=no_above,keep_n=keep_n)
+			self.dictionary.filter_extremes(no_below=max(2,no_below*self.total_docs),no_above=no_above,keep_n=None)
 			logger.info("   **** Dictionary filtered.")
 			#logger.info(" **** Co-occurrence pruned.")
 			self.documents = [self.dictionary.doc2bow(d) for d in self]
@@ -100,12 +100,14 @@ def eval_document_surprise_matrix(doc,model):
 if __name__ == "__main__":
 	inputfile = sys.argv[1]
 	acm = ACMDL_DocReader(inputfile)
-	acm.preprocess(no_below=0.0001, no_above=0.75, keep_n=None)
-	model = glove.Glove(acm.correlations, d=250, alpha=0.75, x_max=100.0)
+	acm.preprocess(no_below=0.0001, no_above=1)
+	model = glove.Glove(acm.cooccurrence, d=500, alpha=0.75, x_max=100.0)
 	logger.info(" ** Training GloVe")
+	init_step_size = 0.1
+	step_size_decay = 10
 	for epoch in range(100):
-		err = model.train(workers=multiprocessing.cpu_count(), batch_size=1000)
-		logger.info("   **** Training GloVe: epoch %d, error %.3f" % (epoch, err))
+		err = model.train(workers=multiprocessing.cpu_count() - 2, batch_size=1000, step_size=init_step_size/(1+epoch/step_size_decay))
+		logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
 	print model.W[acm.dictionary.token2id["computer"]]
 
 	print eval_document_surprise_matrix(acm.documents[0],model)

@@ -1,4 +1,4 @@
-import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, glove, itertools, pprint
+import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, glove, itertools, pprint, argparse
 import cPickle as pickle
 import numpy as np
 from nltk.corpus import stopwords,wordnet
@@ -139,16 +139,28 @@ def most_similar_differences(surp_list, model, dictionary, n = 10):
 
 
 if __name__ == "__main__":
-	inputfile = sys.argv[1]
-	acm = ACMDL_DocReader(inputfile)
-	acm.preprocess(no_below=0.001, no_above=0.75)
-	model = glove.Glove(acm.cooccurrence, d=250, alpha=0.75, x_max=10)
+	parser = argparse.ArgumentParser(description="Run GloVeX on some text.")
+	parser.add_argument("inputfile", help='The file path to work with (omit the ".csv")')
+	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
+	parser.add_argument("--epochs", default = 100, type=int, help="The number of epochs to train GloVe for.")
+	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
+	parser.add_argument("--glove_x_max", default = 100.0, type=float, help="x_max parameter in GloVe.")
+	parser.add_argument("--glove_alpha", default = 0.75, type=float, help="alpha parameter in GloVe.")
+	parser.add_argument("--no_below", default = 0.001, type=float, help="Min fraction of documents a word must appear in to be included.")
+	parser.add_argument("--no_above", default = 0.75, type=float, help="Max fraction of documents a word can appear in to be included.")
+
+
+	args = parser.parse_args()
+	acm = ACMDL_DocReader(args.inputfile)
+	acm.preprocess(no_below=args.no_below, no_above=args.no_above)
+	model = glove.Glove(acm.cooccurrence, d=args.dims, alpha=args.glove_alpha, x_max=args.glove_x_max)
 	logger.info(" ** Training GloVe")
-	init_step_size = 0.1
+	init_step_size = args.learning_rate
 	step_size_decay = 10.0
 	doc = acm.documents[0]
-	for epoch in range(250):
-		err = model.train(workers=multiprocessing.cpu_count() - 2, batch_size=1000, step_size=init_step_size/(1.0+epoch/step_size_decay))
+	cores = multiprocessing.cpu_count() - 2
+	for epoch in range(args.epochs):
+		err = model.train(workers=cores, batch_size=1000, step_size=init_step_size/(1.0+epoch/step_size_decay))
 		logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
 		if epoch % 10 == 0:
 			est_cooc_mat = estimate_document_cooccurrence_matrix(doc,model,acm.cooccurrence)

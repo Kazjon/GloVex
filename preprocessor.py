@@ -1,4 +1,4 @@
-import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, glove, itertools, pprint, argparse, scipy.spatial
+import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, glove, itertools, pprint, argparse, scipy.spatial, glob
 import cPickle as pickle
 import numpy as np
 from nltk.corpus import stopwords,wordnet
@@ -54,6 +54,11 @@ class ACMDL_DocReader(object):
 				yield docwords
 		self.first_pass = False
 
+	def load(self,preprocessed_path):
+		with open(preprocessed_path,"rb") as pro_f:
+			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs = pickle.load(pro_f)
+			self.first_pass = False
+
 	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False):
 		self.argstring = "_below"+str(no_below)+"_above"+str(no_above)
 		preprocessed_path = self.filepath+self.argstring+suffix
@@ -73,9 +78,7 @@ class ACMDL_DocReader(object):
 		else:
 			logger.info(" ** Existing pre-processed file found.  Rerun with --overwrite_preprocessing"+
 						" if you did not intend to reuse it.")
-			with open(preprocessed_path,"rb") as pro_f:
-				self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs = pickle.load(pro_f)
-				self.first_pass = False
+			self.load(preprocessed_path)
 		logger.info(" ** Pre-processing complete.")
 
 	def calc_cooccurrence(self, normalise = False):
@@ -179,13 +182,15 @@ def most_similar_differences(surp, surp_list, model, n = 10):
 	results.sort(key = lambda x: x[4])
 	return results[:n]
 
-def glovex_model(filepath, argstring, cooccurrence, dims, alpha, x_max, force_overwrite = False, suffix = ".glovex"):
-	model_path = filepath+argstring+suffix
-	if not os.path.exists(model_path) or force_overwrite:
+def glovex_model(filepath, argstring, cooccurrence, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex"):
+	model_path = filepath+argstring
+	model_files = glob.glob(model_path+"_epochs*"+suffix)
+	if not len(model_files) or force_overwrite:
 		model = glove.Glove(cooccurrence, d=dims, alpha=alpha, x_max=x_max)
 	else:
+		highest_epochs = max([int(f.split("epochs")[1].split(".")[0]) for f in model_files])
 		logger.info(" ** Existing model file found.  Re-run with --overwrite_model if you did not intend to reuse it.")
-		with open(model_path,"rb") as pro_f:
+		with open(model_path+"_epochs"+str(highest_epochs)+suffix,"rb") as pro_f:
 			model = pickle.load(pro_f)
 	return model
 
@@ -193,12 +198,12 @@ def save_model(model,path,args,suffix=".glovex"):
 	with open(path+args+suffix,"wb") as f:
 		pickle.dump(model,f)
 
-def estimate_document_surprise(doc, model, acm):
+def estimate_document_surprise_pairs(doc, model, acm):
 	est_cooc_mat = estimate_document_cooccurrence_matrix(doc,model,acm.cooccurrence)
 	return document_cooccurrence_to_surprise(doc, est_cooc_mat, acm.word_occurrence, acm.dictionary, len(acm.documents))
 
 def percentile_doc_surprise(doc, model, acm, percentile = 95):
-	surps = estimate_document_surprise(doc, model, acm)
+	surps = estimate_document_surprise_pairs(doc, model, acm)
 	return np.percentile([x[2] for x in surps], percentile)
 
 def print_top_n_surps(model, acm):
@@ -216,7 +221,7 @@ def print_top_n_surps(model, acm):
 	top_surps = []
 	for doc in acm.documents:
 		if len(doc):
-			top_surps += estimate_document_surprise(doc, model, acm)[:10]
+			top_surps += estimate_document_surprise_pairs(doc, model, acm)[:10]
 			top_surps = list(set(top_surps))
 			top_surps.sort(key = lambda x: x[2], reverse=False)
 			top_surps = top_surps[:10]

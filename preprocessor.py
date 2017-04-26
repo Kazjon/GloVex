@@ -284,11 +284,11 @@ if __name__ == "__main__":
 	logger.info(" ** Training GloVe")
 	init_step_size = args.learning_rate
 	step_size_decay = 10.0
-	doc = acm.documents[0]
 	cores = multiprocessing.cpu_count() - 2
 	for epoch in range(args.epochs):
 		err = model.train(workers=cores, batch_size=1000, step_size=init_step_size/(1.0+epoch/step_size_decay))
 		logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
-		if epoch and epoch % 10 == 0:
+		if epoch and epoch % 50 == 0:
 			print_top_n_surps(model, acm)
 			save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))
+	save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))

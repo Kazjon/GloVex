@@ -32,6 +32,8 @@ class ACMDL_DocReader(object):
 		self.tokeniser = RegexpTokenizer(r'\w+')
 		self.first_pass = True
 		self.finalised = False
+		self.doc_ids = []
+		self.doc_titles = []
 
 	def __iter__(self):
 		lem = WordNetLemmatizer()
@@ -50,13 +52,15 @@ class ACMDL_DocReader(object):
 				if self.first_pass:
 					self.total_words += len(docwords)
 					self.total_docs += 1
+					self.doc_ids.append(row["ID"])
+					self.doc_titles.append(row["Abstract Title"])
 
 				yield docwords
 		self.first_pass = False
 
 	def load(self,preprocessed_path):
 		with open(preprocessed_path,"rb") as pro_f:
-			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs = pickle.load(pro_f)
+			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles = pickle.load(pro_f)
 			self.first_pass = False
 
 	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False):
@@ -74,7 +78,7 @@ class ACMDL_DocReader(object):
 			self.calc_cooccurrence()
 			logger.info("   **** Co-occurrence matrix constructed.")
 			with open(preprocessed_path,"wb") as pro_f:
-				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs),pro_f)
+				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles),pro_f)
 		else:
 			logger.info(" ** Existing pre-processed file found.  Rerun with --overwrite_preprocessing"+
 						" if you did not intend to reuse it.")
@@ -198,9 +202,13 @@ def save_model(model,path,args,suffix=".glovex"):
 	with open(path+args+suffix,"wb") as f:
 		pickle.dump(model,f)
 
-def estimate_document_surprise_pairs(doc, model, acm):
+def estimate_document_surprise_pairs(doc, model, acm, top_n_per_doc = 0):
 	est_cooc_mat = estimate_document_cooccurrence_matrix(doc,model,acm.cooccurrence)
-	return document_cooccurrence_to_surprise(doc, est_cooc_mat, acm.word_occurrence, acm.dictionary, len(acm.documents))
+	surps = document_cooccurrence_to_surprise(doc, est_cooc_mat, acm.word_occurrence, acm.dictionary, len(acm.documents))
+	surps.sort(key = lambda x: x[2])
+	if top_n_per_doc:
+		return surps[:top_n_per_doc]
+	return surps
 
 def percentile_doc_surprise(doc, model, acm, percentile = 95):
 	surps = estimate_document_surprise_pairs(doc, model, acm)

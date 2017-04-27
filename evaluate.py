@@ -5,14 +5,19 @@ import preprocessor
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
 
-def eval_dataset_surprise(model, acm, top_n_per_doc = 0):
+def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000):
+	logger.info("  ** Evaluating dataset.")
 	dataset_surps = []
+	count = 0
 	for id,title,doc in zip(acm.doc_ids, acm.doc_titles, acm.documents):
+		if count % log_every == 0:
+			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
 			surps = preprocessor.estimate_document_surprise_pairs(doc, model, acm, top_n_per_doc = top_n_per_doc)
 			dataset_surps.append((id,title,surps,document_surprise(surps)))
 		else:
 			dataset_surps.append((id,title,[],3))
+		count+=1
 	return dataset_surps
 
 def document_surprise(surps):

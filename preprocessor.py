@@ -35,6 +35,7 @@ class ACMDL_DocReader(object):
 		self.finalised = False
 		self.doc_ids = []
 		self.doc_titles = []
+		self.doc_raws = []
 
 	def __iter__(self):
 		lem = WordNetLemmatizer()
@@ -55,13 +56,14 @@ class ACMDL_DocReader(object):
 					self.total_docs += 1
 					self.doc_ids.append(row["ID"])
 					self.doc_titles.append(row["Abstract Title"])
+					self.doc_raws.append(row["Abstract"])
 
 				yield docwords
 		self.first_pass = False
 
 	def load(self,preprocessed_path):
 		with open(preprocessed_path,"rb") as pro_f:
-			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles = pickle.load(pro_f)
+			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws = pickle.load(pro_f)
 			self.first_pass = False
 
 	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False):
@@ -79,7 +81,7 @@ class ACMDL_DocReader(object):
 			self.calc_cooccurrence()
 			logger.info("   **** Co-occurrence matrix constructed.")
 			with open(preprocessed_path,"wb") as pro_f:
-				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles),pro_f)
+				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws),pro_f)
 		else:
 			logger.info(" ** Existing pre-processed file found.  Rerun with --overwrite_preprocessing"+
 						" if you did not intend to reuse it.")

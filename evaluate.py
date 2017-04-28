@@ -15,7 +15,9 @@ def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
-			surps = estimate_document_surprise_pairs(doc, model, acm, top_n_per_doc = top_n_per_doc, ignore_order=ignore_order)
+			surps = estimate_document_surprise_pairs(doc, model, acm, ignore_order=ignore_order)
+			if top_n_per_doc and len(surps) > top_n_per_doc:
+				surps = surps[:top_n_per_doc]
 			dataset_surps.append((id,title,surps,document_surprise(surps)))
 		else:
 			dataset_surps.append((id,title,[],3))
@@ -23,9 +25,9 @@ def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_
 	logger.info("  ** Evaluation complete.")
 	return dataset_surps
 
-def document_surprise(surps):
+def document_surprise(surps, percentile=95):
 	if len(surps):
-		return min([s[2] for s in surps])
+		return np.percentile([x[2] for x in surps], percentile)
 	return float("inf")
 
 def estimate_document_surprise_pairs(doc, model, acm, top_n_per_doc = 0, ignore_order=True):
@@ -35,10 +37,6 @@ def estimate_document_surprise_pairs(doc, model, acm, top_n_per_doc = 0, ignore_
 	if top_n_per_doc and len(surps) > top_n_per_doc:
 		return surps[:top_n_per_doc]
 	return surps
-
-def percentile_doc_surprise(doc, model, acm, percentile = 95):
-	surps = estimate_document_surprise_pairs(doc, model, acm)
-	return np.percentile([x[2] for x in surps], percentile)
 
 def word_pair_surprise(w1_w2_cooccurrence, w1_occurrence, w2_occurrence, n_docs, offset = 1):
 	# Offset is Laplacian smoothing

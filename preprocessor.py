@@ -45,7 +45,7 @@ class ACMDL_DocReader(object):
 				#docwords = [w for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
 
 				#Singularise
-				docwords = [singularize(w) for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
+				docwords = [singularize(w) for w in self.tokeniser.tokenize((row["Abstract Title"]+" "+row["Abstract"]).lower()) if w not in self.stop]
 
 				#tag+lemmatize
 				#docwords = nltk.pos_tag(self.tokeniser.tokenize(row["Abstract"].lower()))

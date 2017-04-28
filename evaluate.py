@@ -11,23 +11,23 @@ def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_
 	logger.info("  ** Evaluating dataset.")
 	dataset_surps = []
 	count = 0
-	for id,title,doc in zip(acm.doc_ids, acm.doc_titles, acm.documents):
+	for id,title,doc,raw_doc in zip(acm.doc_ids, acm.doc_titles, acm.documents, acm.doc_raws):
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
 			surps = estimate_document_surprise_pairs(doc, model, acm, ignore_order=ignore_order)
 			if top_n_per_doc and len(surps) > top_n_per_doc:
 				surps = surps[:top_n_per_doc]
-			dataset_surps.append((id,title,surps,document_surprise(surps)))
+			dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
 		else:
-			dataset_surps.append((id,title,[],3))
+			dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
 		count+=1
 	logger.info("  ** Evaluation complete.")
 	return dataset_surps
 
 def document_surprise(surps, percentile=95):
 	if len(surps):
-		return np.percentile([x[2] for x in surps], percentile)
+		return np.percentile([x[2] for x in surps], 100-percentile) #note that percentile calculates the highest.
 	return float("inf")
 
 def estimate_document_surprise_pairs(doc, model, acm, top_n_per_doc = 0, ignore_order=True):
@@ -142,15 +142,17 @@ if __name__ == "__main__":
 	model = preprocessor.glovex_model(args.inputfile, acm.argstring, acm.cooccurrence)
 	logger.info(" ** Loaded GloVe")
 	dataset_surps = eval_dataset_surprise(model, acm, top_n_per_doc=25)
-	dataset_surps.sort(key = lambda x: x[1])
-	unique_surps = set((p for s in dataset_surps for p in s[2]))
+	dataset_surps.sort(key = lambda x: x["surprise"])
+	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
 	for doc in dataset_surps[:10]:
-		print doc[0]+":", doc[1]
-		print doc[2]
-		most_similar = most_similar_differences(doc[2][0],unique_surps,model, acm.dictionary)
-		print "  ** Most similar to top surprise:("+str(doc[2][0])+")"
+		print doc["id"]+":", doc["title"]
+		print "  ** 95th percentile surprise:",doc["surprise"]
+		print "  ** Abstract:",doc["raw"]
+		print "  ** Surprising pairs:",doc["surprises"]
+		most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, acm.dictionary)
+		print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
 		for pair in most_similar:
-			print "    * ",pair[4],":",pair[1]
+			print "    ** ",pair[4],":",pair[1]
 		print
 
 

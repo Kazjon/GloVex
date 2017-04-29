@@ -94,7 +94,7 @@ def document_cooccurrence_to_surprise(doc, cooc_mat, word_occurrence, dictionary
 def most_similar_features(surp, surp_list, model, dictionary, n = 10):
 	results = []
 	for surp2 in surp_list:
-		if surp[:2] is not surp2[:2]:
+		if not surp[:2] == surp2[:2]:
 			surp_feat = model.W[dictionary.token2id[surp[0]]]
 			surp2_feat = model.W[dictionary.token2id[surp2[0]]]
 			results.append([surp,surp2,scipy.spatial.distance.euclidean(surp_feat, surp2_feat)])
@@ -107,7 +107,7 @@ def most_similar_features(surp, surp_list, model, dictionary, n = 10):
 def most_similar_contexts(surp, surp_list, model, dictionary, n = 10):
 	results = []
 	for surp2 in surp_list:
-		if surp[:2] is not surp2[:2]:
+		if not surp[:2] == surp2[:2]:
 			surp_context = model.W[dictionary.token2id[surp[1]]]
 			surp2_context = model.W[dictionary.token2id[surp2[1]]]
 			results.append([surp,surp2,scipy.spatial.distance.euclidean(surp_context, surp2_context)])
@@ -120,7 +120,7 @@ def most_similar_contexts(surp, surp_list, model, dictionary, n = 10):
 def most_similar_differences(surp, surp_list, model, dictionary, n = 10):
 	results = []
 	for surp2 in surp_list:
-		if surp[:2] is not surp2[:2]:
+		if not surp[:2] == surp2[:2]:
 			surp_diff = model.W[dictionary.token2id[surp[0]]] -  model.W[dictionary.token2id[surp[1]]]
 			surp2_diff = model.W[dictionary.token2id[surp2[0]]] -  model.W[dictionary.token2id[surp2[1]]]
 			results.append([surp,surp2,surp_diff,surp2_diff,scipy.spatial.distance.euclidean(surp_diff, surp2_diff)])

@@ -24,7 +24,7 @@ def get_wordnet_pos(treebank_tag):
 	else:
 		return wordnet.NOUN
 
-class ACMDL_DocReader(object):
+class DocReader(object):
 	def __init__(self,path):
 		self.filepath = path
 		self.total_words = 0
@@ -36,30 +36,10 @@ class ACMDL_DocReader(object):
 		self.doc_ids = []
 		self.doc_titles = []
 		self.doc_raws = []
+		self.lem = WordNetLemmatizer()
 
 	def __iter__(self):
-		lem = WordNetLemmatizer()
-		with io.open(self.filepath+".csv",mode="r",encoding='ascii',errors="ignore") as i_f:
-			for row in csv.DictReader(i_f):
-				#Default
-				#docwords = [w for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
-
-				#Singularise
-				docwords = [singularize(w) for w in self.tokeniser.tokenize((row["Abstract Title"]+" "+row["Abstract"]).lower()) if w not in self.stop]
-
-				#tag+lemmatize
-				#docwords = nltk.pos_tag(self.tokeniser.tokenize(row["Abstract"].lower()))
-				#docwords = [lem.lemmatize(w,pos=get_wordnet_pos(t)) for w,t in docwords if w not in self.stop]
-
-				if self.first_pass:
-					self.total_words += len(docwords)
-					self.total_docs += 1
-					self.doc_ids.append(row["ID"])
-					self.doc_titles.append(row["Abstract Title"])
-					self.doc_raws.append(row["Abstract"])
-
-				yield docwords
-		self.first_pass = False
+		raise NotImplementedError
 
 	def load(self,preprocessed_path):
 		with open(preprocessed_path,"rb") as pro_f:
@@ -105,7 +85,63 @@ class ACMDL_DocReader(object):
 			for wk,wv in self.dictionary.iteritems():
 				self.cooccurrence[wk] = {wk2:float(wv2)/self.word_occurrence[wv] for wk2,wv2 in self.cooccurrence[wk].iteritems()}
 
+class ACMDL_DocReader(DocReader):
+	def __init__(self,path):
+		DocReader.__init__(self,path)
 
+	def __iter__(self):
+		with io.open(self.filepath+".csv",mode="r",encoding='ascii',errors="ignore") as i_f:
+			for row in csv.DictReader(i_f):
+				#Default
+				#docwords = [w for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
+
+				#Singularise
+				docwords = [singularize(w) for w in self.tokeniser.tokenize((row["Abstract Title"]+" "+row["Abstract"]).lower()) if w not in self.stop]
+
+				#tag+lemmatize
+				#docwords = nltk.pos_tag(self.tokeniser.tokenize(row["Abstract"].lower()))
+				#docwords = [self.lem.lemmatize(w,pos=get_wordnet_pos(t)) for w,t in docwords if w not in self.stop]
+
+				if self.first_pass:
+					print ".",
+					self.total_words += len(docwords)
+					self.total_docs += 1
+					self.doc_ids.append(row["ID"])
+					self.doc_titles.append(row["Abstract Title"])
+					self.doc_raws.append(row["Abstract"])
+
+				yield docwords
+		self.first_pass = False
+
+class WikiPlot_DocReader(DocReader):
+	def __init__(self,path):
+		DocReader.__init__(self,path)
+
+	def __iter__(self):
+		with io.open(self.filepath,mode="r",encoding='ascii',errors="ignore") as i_f:
+			if self.first_pass:
+				doc_raw = ""
+				t_f = io.open(self.filepath+"_titles",mode="r",encoding='ascii',errors="ignore")
+			docwords = []
+			for line in i_f.readlines():
+				if line[:5] == "<EOS>":
+					if self.first_pass:
+						print ".",
+						self.total_words += len(docwords)
+						self.doc_ids.append(self.total_docs)
+						self.total_docs += 1
+						self.doc_titles.append(t_f.readline())
+						self.doc_raws.append(doc_raw)
+						doc_raw = ""
+					docwords = []
+					yield docwords
+				else:
+					docwords += [singularize(w) for w in self.tokeniser.tokenize(line) if w not in self.stop]
+					if self.first_pass:
+						doc_raw += line
+		if self.first_pass:
+			t_f.close()
+		self.first_pass = False
 
 def glovex_model(filepath, argstring, cooccurrence, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex"):
 	model_path = filepath+argstring
@@ -185,6 +221,7 @@ def print_top_n_surps(model, acm):
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Run GloVeX on some text.")
 	parser.add_argument("inputfile", help='The file path to work with (omit the ".csv")')
+	parser.add_argument("--dataset", default="acm",type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
 	parser.add_argument("--epochs", default = 100, type=int, help="The number of epochs to train GloVe for.")
 	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
@@ -200,9 +237,15 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .preprocessed file.")
 
 	args = parser.parse_args()
-	acm = ACMDL_DocReader(args.inputfile)
-	acm.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
-	model = glovex_model(args.inputfile, acm.argstring, acm.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
+	if args.dataset == "acm":
+		reader = ACMDL_DocReader(args.inputfile)
+	elif args.dataset == "plots":
+		reader = WikiPlot_DocReader(args.inputfile)
+	else:
+		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
+		sys.exit()
+	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+	model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 						 args.overwrite_model)
 	logger.info(" ** Training GloVe")
 	init_step_size = args.learning_rate
@@ -212,6 +255,6 @@ if __name__ == "__main__":
 		err = model.train(workers=cores, batch_size=1000, step_size=init_step_size/(1.0+epoch/step_size_decay))
 		logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
 		if epoch and epoch % 50 == 0:
-			print_top_n_surps(model, acm)
+			print_top_n_surps(model, reader)
 			save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))
 	save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))

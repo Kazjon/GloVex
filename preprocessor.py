@@ -103,7 +103,6 @@ class ACMDL_DocReader(DocReader):
 				#docwords = [self.lem.lemmatize(w,pos=get_wordnet_pos(t)) for w,t in docwords if w not in self.stop]
 
 				if self.first_pass:
-					print ".",
 					self.total_words += len(docwords)
 					self.total_docs += 1
 					self.doc_ids.append(row["ID"])
@@ -126,15 +125,14 @@ class WikiPlot_DocReader(DocReader):
 			for line in i_f.readlines():
 				if line[:5] == "<EOS>":
 					if self.first_pass:
-						print ".",
 						self.total_words += len(docwords)
 						self.doc_ids.append(self.total_docs)
 						self.total_docs += 1
 						self.doc_titles.append(t_f.readline())
 						self.doc_raws.append(doc_raw)
 						doc_raw = ""
-					docwords = []
 					yield docwords
+					docwords = []
 				else:
 					docwords += [singularize(w) for w in self.tokeniser.tokenize(line) if w not in self.stop]
 					if self.first_pass:

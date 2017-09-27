@@ -42,13 +42,16 @@ class DocReader(object):
 		self.per_fc_keys_to_all_keys = {}
 		self.all_keys_to_per_fc_keys = {}
 		self.lem = WordNetLemmatizer()
+		self.famcats = []
+		self.docs_per_fc = {}
 
 	def __iter__(self):
 		raise NotImplementedError
 
 	def load(self,preprocessed_path):
 		with open(preprocessed_path,"rb") as pro_f:
-			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats = pickle.load(pro_f)
+			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc = pickle.load(pro_f)
+			self.famcats = self.cooccurrence.keys()
 			self.first_pass = False
 
 	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False):
@@ -65,7 +68,7 @@ class DocReader(object):
 			self.calc_cooccurrence()
 			logger.info("   **** Co-occurrence matrix constructed.")
 			with open(preprocessed_path,"wb") as pro_f:
-				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats),pro_f)
+				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc),pro_f)
 		else:
 			logger.info(" ** Existing pre-processed file found.  Rerun with --overwrite_preprocessing"+
 						" if you did not intend to reuse it.")
@@ -128,6 +131,8 @@ class DocReader(object):
 							self.word_occurrence[fc] = {}
 							self.per_fc_keys_to_all_keys[fc] = {}
 							self.all_keys_to_per_fc_keys[fc] = {}
+							self.docs_per_fc[fc] = 0
+						self.docs_per_fc[fc] += 1
 						try:
 							self.word_occurrence[fc][self.dictionary[wk]] += 1.0
 						except KeyError:
@@ -150,6 +155,7 @@ class DocReader(object):
 								except KeyError:
 									self.cooccurrence[fc][self.all_keys_to_per_fc_keys[fc][wk]][self.all_keys_to_per_fc_keys[fc][wk2]] = 1.0
 			#'''
+			self.famcats = self.cooccurrence.keys()
 		#for fc in self.cooccurrence.keys():
 		#	words_present = set()
 		#	for coocs in self.cooccurrence[fc].values():
@@ -162,7 +168,7 @@ class DocReader(object):
 
 
 class ACMDL_DocReader(DocReader):
-	def __init__(self,path, title_column, text_column, id_column, famcat_path):
+	def __init__(self,path, title_column, text_column, id_column, famcat_path=None):
 		self.title_column = title_column
 		self.text_column = text_column
 		self.id_column = id_column
@@ -175,7 +181,7 @@ class ACMDL_DocReader(DocReader):
 				#famcats = {row[0]:(row[1:] if len(row) > 1 else []) for row in reader}
 
 				#Hacks for working with fake author-based famcats
-				famcats = {row[0]:([n[0] for n in row[1:]] if len(row) > 1 else ["None"]) for row in reader}
+				famcats = {row[0]:([n[0] for n in row[1:] if len(n)] if len(row) > 1 else ["None"]) for row in reader}
 				#famcats = {row[0]:["1"] if random.random() > 0.5 else ["1","2"] for row in reader}
 		with io.open(self.filepath+".csv",mode="r",encoding='ascii',errors="ignore") as i_f:
 			for row in csv.DictReader(i_f):
@@ -239,6 +245,11 @@ def save_model(model,path,args,suffix=".glovex"):
 	with open(path+args+suffix,"wb") as f:
 		pickle.dump(model,f)
 
+def load_personalised_models(filepath, docreader):
+	models = []
+	for fc in docreader.famcats:
+		models.append(glovex_model(filepath, docreader.argstring+"_fc"+str(fc), docreader.cooccurrence[fc]))
+	return models
 
 def print_top_n_surps(model, acm):
 
@@ -310,7 +321,7 @@ if __name__ == "__main__":
 
 	args = parser.parse_args()
 	if args.dataset == "acm":
-		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", args.familiarity_categories)
+		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories)
 	elif args.dataset == "plots":
 		reader = WikiPlot_DocReader(args.inputfile)
 	else:

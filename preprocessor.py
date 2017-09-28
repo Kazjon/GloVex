@@ -1,5 +1,5 @@
 import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, argparse, glob
-import s_glove
+import s_glove as glove
 import cPickle as pickle
 import numpy as np
 from nltk.corpus import stopwords,wordnet

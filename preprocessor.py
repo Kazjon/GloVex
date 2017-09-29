@@ -99,6 +99,7 @@ class DocReader(object):
 		else:
 			self.cooccurrence = {}
 			self.word_occurrence = {}
+			self.cooccurrence_p_values = {}
 
 			'''#Original keys version
 			for doc,doc_fcs in zip(self.documents,self.doc_famcats):
@@ -230,11 +231,11 @@ class WikiPlot_DocReader(DocReader):
 			t_f.close()
 		self.first_pass = False
 
-def glovex_model(filepath, argstring, cooccurrence, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex"):
+def glovex_model(filepath, argstring, cooccurrence, p_values, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex"):
 	model_path = filepath+argstring
 	model_files = glob.glob(model_path+"_epochs*"+suffix)
 	if not len(model_files) or force_overwrite:
-		model = glove.Glove(cooccurrence, d=dims, alpha=alpha, x_max=x_max)
+		model = glove.Glove(cooccurrence, p_values, d=dims, alpha=alpha, x_max=x_max)
 	else:
 		highest_epochs = max([int(f.split("epochs")[1].split(".")[0]) for f in model_files])
 		logger.info(" ** Existing model file found.  Re-run with --overwrite_model if you did not intend to reuse it.")
@@ -330,7 +331,7 @@ if __name__ == "__main__":
 		sys.exit()
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
 	if args.familiarity_categories is None:
-		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
+		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, reader.cooccurrence_p_values, args.dims, args.glove_alpha, args.glove_x_max,
 							 args.overwrite_model)
 		logger.info(" ** Training GloVe")
 		init_step_size = args.learning_rate

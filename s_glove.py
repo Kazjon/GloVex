@@ -2,13 +2,14 @@ import re, gzip, pickle, time
 from multiprocessing import Queue, Lock
 import threading
 import numpy as np
+from scipy import stats
 import pyximport
 pyximport.install(setup_args={"include_dirs": np.get_include()})
 
 from s_glove_inner import train_glove
 
 class Glove(object):
-    def __init__(self, cooccurence, alpha=0.75, x_max=100.0, d=50, seed=1234):
+    def __init__(self, cooccurence, p_values, alpha=0.75, x_max=100.0, d=50, seed=1234):
         """
         Glove model for obtaining dense embeddings from a
         co-occurence (sparse) matrix.
@@ -17,6 +18,7 @@ class Glove(object):
         self.x_max           = x_max
         self.d               = d
         self.cooccurence     = cooccurence
+        self.p_values      = p_values
         self.seed            = seed
         np.random.seed(seed)
         self.W               = np.random.uniform(-0.5/d, 0.5/d, (len(cooccurence), d)).astype(np.float64)
@@ -67,14 +69,15 @@ class Glove(object):
         num_examples = 0
         for key in self.cooccurence:
             for subkey in self.cooccurence[key]:
-                batch.append((key, subkey, self.cooccurence[key][subkey]))
+                batch.append((key, subkey, self.cooccurence[key][subkey], self.p_values[key][subkey]))
                 batch_length += 1
                 if batch_length >= batch_size:
                     jobs.put(
                         (
-                            np.array([k for k,s,c in batch], dtype=np.int32),
-                            np.array([s for k,s,c in batch], dtype=np.int32),
-                            np.array([c for k,s,c in batch], dtype=np.float64)
+                            np.array([k for k,s,c,p in batch], dtype=np.int32),
+                            np.array([s for k,s,c,p in batch], dtype=np.int32),
+                            np.array([c for k,s,c,p in batch], dtype=np.float64),
+                            np.array([p for k,s,c,p in batch], dtype=np.float64)
                         )
                     )
                     num_examples += len(batch)
@@ -83,9 +86,10 @@ class Glove(object):
         if len(batch) > 0:
             jobs.put(
                 (
-                    np.array([k for k,s,c in batch], dtype=np.int32),
-                    np.array([s for k,s,c in batch], dtype=np.int32),
-                    np.array([c for k,s,c in batch], dtype=np.float64)
+                    np.array([k for k,s,c,p in batch], dtype=np.int32),
+                    np.array([s for k,s,c,p in batch], dtype=np.int32),
+                    np.array([c for k,s,c,p in batch], dtype=np.float64),
+                    np.array([p for k,s,c,p in batch], dtype=np.float64)
                 )
             )
             num_examples += len(batch)

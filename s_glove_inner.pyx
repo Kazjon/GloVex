@@ -20,6 +20,7 @@ cdef void train_glove_thread(
         REAL_t * gradsqb, REAL_t * gradsqContextB,
         REAL_t * error,
         INT_t * job_key, INT_t * job_subkey, REAL_t * job_target,
+        REAL_t * p_values,
         int vector_size, int batch_size, REAL_t x_max, REAL_t alpha, REAL_t step_size) nogil:
 
     cdef long long a, b, l1, l2
@@ -35,7 +36,8 @@ cdef void train_glove_thread(
         for b in range(vector_size):
             diff += W[b + l1] * ContextW[b + l2] # dot product of word and context word vector
         diff += bias[job_key[example_idx]] + ContextB[job_subkey[example_idx]] - log(job_target[example_idx]) # add separate bias for each word
-        fdiff = diff if (job_target[example_idx] > x_max) else pow(job_target[example_idx] / x_max, alpha) * diff # multiply weighting function (f) with diff
+        #fdiff = diff if (job_target[example_idx] > x_max) else pow(job_target[example_idx] / x_max, alpha) * diff # multiply weighting function (f) with diff
+        fdiff = diff * (1-p_values[example_idx] # multiply weighting function (f) with diff
         error[0] += 0.5 * fdiff * diff # weighted squared error
 
         # # Adaptive gradient updates

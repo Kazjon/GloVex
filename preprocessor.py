@@ -28,8 +28,9 @@ def get_wordnet_pos(treebank_tag):
 		return wordnet.NOUN
 
 class DocReader(object):
-	def __init__(self,path,famcat_path):
+	def __init__(self,path,famcat_path, run_name=None):
 		self.filepath = path
+		self.run_name = run_name
 		self.famcat_filepath = famcat_path
 		self.total_words = 0
 		self.total_docs = 0
@@ -58,7 +59,10 @@ class DocReader(object):
 			self.first_pass = False
 
 	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False):
-		self.argstring = "_below"+str(no_below)+"_above"+str(no_above)
+		if self.run_name is not None:
+			self.argstring = "_"+self.run_name+"_below"+str(no_below)+"_above"+str(no_above)
+		else:
+			self.argstring = "_below"+str(no_below)+"_above"+str(no_above)
 		preprocessed_path = self.filepath+self.argstring+suffix
 		if not os.path.exists(preprocessed_path) or force_overwrite:
 			logger.info(" ** Pre-processing started.")
@@ -171,11 +175,11 @@ class DocReader(object):
 
 
 class ACMDL_DocReader(DocReader):
-	def __init__(self,path, title_column, text_column, id_column, famcat_path=None):
+	def __init__(self,path, title_column, text_column, id_column, famcat_path=None, run_name=None):
 		self.title_column = title_column
 		self.text_column = text_column
 		self.id_column = id_column
-		DocReader.__init__(self,path,famcat_path)
+		DocReader.__init__(self,path,famcat_path, run_name=run_name)
 
 	def __iter__(self):
 		if self.first_pass and self.famcat_filepath is not None:
@@ -306,6 +310,7 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Run GloVeX on some text.")
 	parser.add_argument("inputfile", help='The file path to work with (omit the ".csv")')
 	parser.add_argument("--dataset", default="acm",type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
+	parser.add_argument("--name", default=None, type=str, help= "Name of this run (used when saving files.)")
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
 	parser.add_argument("--epochs", default = 100, type=int, help="The number of epochs to train GloVe for.")
 	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
@@ -324,7 +329,7 @@ if __name__ == "__main__":
 
 	args = parser.parse_args()
 	if args.dataset == "acm":
-		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories)
+		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories, run_name=args.name)
 	elif args.dataset == "plots":
 		reader = WikiPlot_DocReader(args.inputfile)
 	else:

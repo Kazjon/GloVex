@@ -10,6 +10,7 @@ from inflection import singularize
 from prettytable import PrettyTable
 import evaluate
 import random
+from scipy.stats import fisher_exact
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
@@ -45,6 +46,7 @@ class DocReader(object):
 		self.lem = WordNetLemmatizer()
 		self.famcats = []
 		self.docs_per_fc = {}
+		self.cooccurrence_p_values = {}
 
 	def __iter__(self):
 		raise NotImplementedError
@@ -76,6 +78,11 @@ class DocReader(object):
 			self.load(preprocessed_path)
 		logger.info(" ** Pre-processing complete.")
 
+	def significance(self,w1_occurrence, w2_occurrence, cooccurrences, n_docs):
+		table = [[cooccurrences,w2_occurrence-cooccurrences],[w1_occurrence,(n_docs-w1_occurrence)]]
+		oddsratio, pvalue = fisher_exact(table, alternative="less")
+		return pvalue
+
 	#Note: Normalisation not implemented for personalised version (w/ famcats)
 	#Note: Not yet tracking total words and total docs per famcat -- may need to revisit this
 	def calc_cooccurrence(self, normalise = False):
@@ -96,33 +103,22 @@ class DocReader(object):
 			if normalise:
 				for wk,wv in self.dictionary.iteritems():
 					self.cooccurrence[wk] = {wk2:float(wv2)/self.word_occurrence[wv] for wk2,wv2 in self.cooccurrence[wk].iteritems()}
+
+			for w1 in self.cooccurrence:
+				if w1 not in self.cooccurrence_p_values.keys():
+					self.cooccurrence_p_values[w1] = {}
+				for w2 in self.cooccurrence:
+					if w1 != w2:
+						self.cooccurrence_p_values[w1][w2] = self.significance(
+							self.word_occurrence[self.dictionary[w1]],
+							self.word_occurrence[self.dictionary[w2]],
+							self.cooccurrence[w1][w2],
+							self.total_docs
+						)
 		else:
 			self.cooccurrence = {}
 			self.word_occurrence = {}
-			self.cooccurrence_p_values = {}
 
-			'''#Original keys version
-			for doc,doc_fcs in zip(self.documents,self.doc_famcats):
-				self.total_docs += 1.0
-				for wk,wc in doc:
-					self.total_words += wc
-					for fc in doc_fcs:
-						if fc not in self.cooccurrence.keys():
-							self.cooccurrence[fc] = {}
-							self.word_occurrence[fc] = {}
-						try:
-							self.word_occurrence[fc][self.dictionary[wk]] += 1.0
-						except KeyError:
-							self.word_occurrence[fc][self.dictionary[wk]] = 1.0
-						if wk not in self.cooccurrence[fc].keys():
-							self.cooccurrence[fc][wk] = {}
-						for wk2,wc2 in doc:
-							if wk != wk2:
-								try:
-									self.cooccurrence[fc][wk][wk2] += 1.0
-								except KeyError:
-									self.cooccurrence[fc][wk][wk2] = 1.0
-			#'''
 			for doc,doc_fcs in zip(self.documents,self.doc_famcats):
 				self.total_docs += 1.0
 				for wk,wc in doc:
@@ -156,16 +152,21 @@ class DocReader(object):
 									self.cooccurrence[fc][self.all_keys_to_per_fc_keys[fc][wk]][self.all_keys_to_per_fc_keys[fc][wk2]] += 1.0
 								except KeyError:
 									self.cooccurrence[fc][self.all_keys_to_per_fc_keys[fc][wk]][self.all_keys_to_per_fc_keys[fc][wk2]] = 1.0
-			#'''
+
 			self.famcats = self.cooccurrence.keys()
-		#for fc in self.cooccurrence.keys():
-		#	words_present = set()
-		#	for coocs in self.cooccurrence[fc].values():
-		#		words_present.update(coocs.keys())
-		#	print fc
-		#	print "words present:",words_present
-		#	print "self.cooccurrence[fc].keys():",self.cooccurrence[fc].keys()
-		#	print words_present.symmetric_difference(set(self.cooccurrence[fc].keys()))
+			for fc in self.famcats:
+				for w1 in self.cooccurrence[fc]:
+					if w1 not in self.cooccurrence_p_values[fc].keys():
+						self.cooccurrence_p_values[fc][w1] = {}
+					for w2 in self.cooccurrence[fc]:
+						if w1 != w2:
+							self.cooccurrence_p_values[fc][w1][w2] = self.significance(
+								self.word_occurrence[fc][self.dictionary[w1]],
+								self.word_occurrence[fc][self.dictionary[w2]],
+								self.cooccurrence[fc][w1][w2],
+								self.docs_per_fc[fc]
+							)
+
 
 
 
@@ -355,7 +356,7 @@ if __name__ == "__main__":
 			for epoch in range(args.epochs):
 				err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
 				logger.info("   **** Training GloVe for "+fc+": epoch %d, error %.5f" % (epoch, err))
-				if epoch and epoch % 50 == 0:
+				if epoch and epoch % 25 == 0:
 					print_top_n_surps(model, reader)
 					save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_fc"+fc+"_epochs"+str(epoch))
 			save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_fc"+fc+"_epochs"+str(epoch))

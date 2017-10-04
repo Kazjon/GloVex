@@ -1,5 +1,6 @@
 import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, argparse, glob
-import s_glove as glove
+import s_glove
+from glove import glove
 import cPickle as pickle
 import numpy as np
 from nltk.corpus import stopwords,wordnet
@@ -28,7 +29,7 @@ def get_wordnet_pos(treebank_tag):
 		return wordnet.NOUN
 
 class DocReader(object):
-	def __init__(self,path,famcat_path, run_name=None):
+	def __init__(self,path,famcat_path, run_name=None, use_sglove=False):
 		self.filepath = path
 		self.run_name = run_name
 		self.famcat_filepath = famcat_path
@@ -48,13 +49,14 @@ class DocReader(object):
 		self.famcats = []
 		self.docs_per_fc = {}
 		self.cooccurrence_p_values = {}
+		self.use_sglove = use_sglove
 
 	def __iter__(self):
 		raise NotImplementedError
 
 	def load(self,preprocessed_path):
 		with open(preprocessed_path,"rb") as pro_f:
-			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc = pickle.load(pro_f)
+			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove = pickle.load(pro_f)
 			self.famcats = self.cooccurrence.keys()
 			self.first_pass = False
 
@@ -74,8 +76,11 @@ class DocReader(object):
 			logger.info("   **** BoW representations constructed.")
 			self.calc_cooccurrence()
 			logger.info("   **** Co-occurrence matrix constructed.")
+			if self.use_sglove:
+				self.calc_cooccurrence_significance()
+				logger.info("   **** Co-occurrence signficance matrix calculated.")
 			with open(preprocessed_path,"wb") as pro_f:
-				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc),pro_f)
+				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove),pro_f)
 		else:
 			logger.info(" ** Existing pre-processed file found.  Rerun with --overwrite_preprocessing"+
 						" if you did not intend to reuse it.")
@@ -88,7 +93,6 @@ class DocReader(object):
 		return pvalue
 
 	#Note: Normalisation not implemented for personalised version (w/ famcats)
-	#Note: Not yet tracking total words and total docs per famcat -- may need to revisit this
 	def calc_cooccurrence(self, normalise = False):
 		if self.famcat_filepath is None:
 			self.word_occurrence = {k:0.0 for k in self.dictionary.token2id.keys()}
@@ -158,28 +162,44 @@ class DocReader(object):
 									self.cooccurrence[fc][self.all_keys_to_per_fc_keys[fc][wk]][self.all_keys_to_per_fc_keys[fc][wk2]] = 1.0
 
 			self.famcats = self.cooccurrence.keys()
+
+	def calc_cooccurrence_significance(self):
+		if len(self.famcats):
 			for fc in self.famcats:
+				self.cooccurrence_p_values[fc] = {}
 				for w1 in self.cooccurrence[fc]:
 					if w1 not in self.cooccurrence_p_values[fc].keys():
 						self.cooccurrence_p_values[fc][w1] = {}
 					for w2 in self.cooccurrence[fc]:
 						if w1 != w2:
 							self.cooccurrence_p_values[fc][w1][w2] = self.significance(
-								self.word_occurrence[fc][self.dictionary[w1]],
-								self.word_occurrence[fc][self.dictionary[w2]],
-								self.cooccurrence[fc][w1][w2],
+								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w1]]],
+								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w2]]],
+								self.cooccurrence[fc][w1][w2] if w2 in self.cooccurrence[fc][w1] else 0,
 								self.docs_per_fc[fc]
 							)
-
+		else:
+			self.cooccurrence_p_values = {}
+			for w1 in self.cooccurrence:
+				if w1 not in self.cooccurrence_p_values.keys():
+					self.cooccurrence_p_values[w1] = {}
+				for w2 in self.cooccurrence:
+					if w1 != w2:
+						self.cooccurrence_p_values[w1][w2] = self.significance(
+							self.word_occurrence[self.dictionary[w1]],
+							self.word_occurrence[self.dictionary[w2]],
+							self.cooccurrence[w1][w2] if w2 in self.cooccurrence[w1] else 0,
+							self.total_docs
+						)
 
 
 
 class ACMDL_DocReader(DocReader):
-	def __init__(self,path, title_column, text_column, id_column, famcat_path=None, run_name=None):
+	def __init__(self,path, title_column, text_column, id_column, famcat_path=None, run_name=None, use_sglove=False):
 		self.title_column = title_column
 		self.text_column = text_column
 		self.id_column = id_column
-		DocReader.__init__(self,path,famcat_path, run_name=run_name)
+		DocReader.__init__(self,path,famcat_path, run_name=run_name, use_sglove=args.use_sglove)
 
 	def __iter__(self):
 		if self.first_pass and self.famcat_filepath is not None:
@@ -236,11 +256,14 @@ class WikiPlot_DocReader(DocReader):
 			t_f.close()
 		self.first_pass = False
 
-def glovex_model(filepath, argstring, cooccurrence, p_values, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex"):
+def glovex_model(filepath, argstring, cooccurrence, p_values, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex", use_sglove=False):
 	model_path = filepath+argstring
 	model_files = glob.glob(model_path+"_epochs*"+suffix)
 	if not len(model_files) or force_overwrite:
-		model = glove.Glove(cooccurrence, p_values, d=dims, alpha=alpha, x_max=x_max)
+		if use_sglove:
+			model = s_glove.Glove(cooccurrence, p_values, d=dims, alpha=alpha)
+		else:
+			model = glove.Glove(cooccurrence, d=dims, alpha=alpha, x_max=x_max)
 	else:
 		highest_epochs = max([int(f.split("epochs")[1].split(".")[0]) for f in model_files])
 		logger.info(" ** Existing model file found.  Re-run with --overwrite_model if you did not intend to reuse it.")
@@ -324,12 +347,14 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .glovex file.")
 	parser.add_argument("--overwrite_preprocessing", action="store_true",
 						help="Ignore (and overwrite) existing .preprocessed file.")
+	parser.add_argument("--use_sglove", action="store_true",
+						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
 	parser.add_argument("--familiarity_categories", default=None, type=str,
 						help='The (optional) path to the file containing IDs and familiarity categories (omit the ".csv")')
 
 	args = parser.parse_args()
 	if args.dataset == "acm":
-		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories, run_name=args.name)
+		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
 		reader = WikiPlot_DocReader(args.inputfile)
 	else:
@@ -338,7 +363,7 @@ if __name__ == "__main__":
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
 	if args.familiarity_categories is None:
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, reader.cooccurrence_p_values, args.dims, args.glove_alpha, args.glove_x_max,
-							 args.overwrite_model)
+							 args.overwrite_model, use_sglove=args.use_sglove)
 		logger.info(" ** Training GloVe")
 		init_step_size = args.learning_rate
 		step_size_decay = 10.0
@@ -352,8 +377,8 @@ if __name__ == "__main__":
 		save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))
 	else:
 		for fc,fc_cooccurrence in reader.cooccurrence.iteritems():
-			model = glovex_model(args.inputfile, reader.argstring+"_fc"+fc, fc_cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
-								 args.overwrite_model)
+			model = glovex_model(args.inputfile, reader.argstring+"_fc"+fc, fc_cooccurrence, reader.cooccurrence_p_values[fc], args.dims, args.glove_alpha, args.glove_x_max,
+								 args.overwrite_model, use_sglove=args.use_sglove)
 			logger.info(" ** Training GloVe for "+fc)
 			init_step_size = args.learning_rate
 			step_size_decay = 10.0

@@ -28,6 +28,17 @@ def get_wordnet_pos(treebank_tag):
 	else:
 		return wordnet.NOUN
 
+def significance(w1_occurrence, w2_occurrence, cooccurrences, n_docs):
+	table = [[cooccurrences,w2_occurrence-cooccurrences],[w1_occurrence,(n_docs-w1_occurrence)]]
+	oddsratio, pvalue = fisher_exact(table, alternative="less")
+	return pvalue
+
+def significance_on_tuple(sig_tuple):
+	_, _, w1_occurrence, w2_occurrence, cooccurrences, n_docs = sig_tuple
+	table = [[cooccurrences,w2_occurrence-cooccurrences],[w1_occurrence,(n_docs-w1_occurrence)]]
+	oddsratio, pvalue = fisher_exact(table, alternative="less")
+	return pvalue
+
 class DocReader(object):
 	def __init__(self,path,famcat_path, run_name=None, use_sglove=False):
 		self.filepath = path
@@ -77,7 +88,7 @@ class DocReader(object):
 			self.calc_cooccurrence()
 			logger.info("   **** Co-occurrence matrix constructed.")
 			if self.use_sglove:
-				self.calc_cooccurrence_significance()
+				self.calc_cooccurrence_significance_parallel()
 				logger.info("   **** Co-occurrence signficance matrix calculated.")
 			with open(preprocessed_path,"wb") as pro_f:
 				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove),pro_f)
@@ -86,11 +97,6 @@ class DocReader(object):
 						" if you did not intend to reuse it.")
 			self.load(preprocessed_path)
 		logger.info(" ** Pre-processing complete.")
-
-	def significance(self,w1_occurrence, w2_occurrence, cooccurrences, n_docs):
-		table = [[cooccurrences,w2_occurrence-cooccurrences],[w1_occurrence,(n_docs-w1_occurrence)]]
-		oddsratio, pvalue = fisher_exact(table, alternative="less")
-		return pvalue
 
 	#Note: Normalisation not implemented for personalised version (w/ famcats)
 	def calc_cooccurrence(self, normalise = False):
@@ -112,17 +118,6 @@ class DocReader(object):
 				for wk,wv in self.dictionary.iteritems():
 					self.cooccurrence[wk] = {wk2:float(wv2)/self.word_occurrence[wv] for wk2,wv2 in self.cooccurrence[wk].iteritems()}
 
-			for w1 in self.cooccurrence:
-				if w1 not in self.cooccurrence_p_values.keys():
-					self.cooccurrence_p_values[w1] = {}
-				for w2 in self.cooccurrence:
-					if w1 != w2:
-						self.cooccurrence_p_values[w1][w2] = self.significance(
-							self.word_occurrence[self.dictionary[w1]],
-							self.word_occurrence[self.dictionary[w2]],
-							self.cooccurrence[w1][w2],
-							self.total_docs
-						)
 		else:
 			self.cooccurrence = {}
 			self.word_occurrence = {}
@@ -167,12 +162,12 @@ class DocReader(object):
 		if len(self.famcats):
 			for fc in self.famcats:
 				self.cooccurrence_p_values[fc] = {}
-				for w1 in self.cooccurrence[fc]:
+				for w1 in self.cooccurrence[fc].keys():
 					if w1 not in self.cooccurrence_p_values[fc].keys():
 						self.cooccurrence_p_values[fc][w1] = {}
-					for w2 in self.cooccurrence[fc]:
+					for w2 in self.cooccurrence[fc].keys():
 						if w1 != w2:
-							self.cooccurrence_p_values[fc][w1][w2] = self.significance(
+							self.cooccurrence_p_values[fc][w1][w2] = significance(
 								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w1]]],
 								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w2]]],
 								self.cooccurrence[fc][w1][w2] if w2 in self.cooccurrence[fc][w1] else 0,
@@ -180,19 +175,50 @@ class DocReader(object):
 							)
 		else:
 			self.cooccurrence_p_values = {}
-			for w1 in self.cooccurrence:
+			for w1 in self.cooccurrence.keys():
 				if w1 not in self.cooccurrence_p_values.keys():
 					self.cooccurrence_p_values[w1] = {}
-				for w2 in self.cooccurrence:
+				for w2 in self.cooccurrence.keys():
 					if w1 != w2:
-						self.cooccurrence_p_values[w1][w2] = self.significance(
+						self.cooccurrence_p_values[w1][w2] = significance(
 							self.word_occurrence[self.dictionary[w1]],
 							self.word_occurrence[self.dictionary[w2]],
 							self.cooccurrence[w1][w2] if w2 in self.cooccurrence[w1] else 0,
 							self.total_docs
 						)
 
-
+	def calc_cooccurrence_significance_parallel(self):
+		if len(self.famcats):
+			for fc in self.famcats:
+				self.cooccurrence_p_values[fc] = {}
+				for w1 in self.cooccurrence[fc].keys():
+					if w1 not in self.cooccurrence_p_values[fc].keys():
+						self.cooccurrence_p_values[fc][w1] = {}
+					for w2 in self.cooccurrence[fc].keys():
+						if w1 != w2:
+							self.cooccurrence_p_values[fc][w1][w2] = significance(
+								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w1]]],
+								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w2]]],
+								self.cooccurrence[fc][w1][w2] if w2 in self.cooccurrence[fc][w1] else 0,
+								self.docs_per_fc[fc]
+							)
+		else:
+			sigs_to_compute = []
+			self.cooccurrence_p_values = {}
+			for w1 in self.cooccurrence.keys():
+				if w1 not in self.cooccurrence_p_values.keys():
+					self.cooccurrence_p_values[w1] = {}
+				for w2 in self.cooccurrence.keys():
+					if w1 != w2:
+						sigs_to_compute.append((w1,
+												w2,
+												self.word_occurrence[self.dictionary[w1]],
+												self.word_occurrence[self.dictionary[w2]],
+												self.cooccurrence[w1][w2] if w2 in self.cooccurrence[w1] else 0,
+												self.total_docs))
+			computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple)(sig) for sig in sigs_to_compute)
+			for sig,p in zip(sigs_to_compute,computed_sigs):
+				self.cooccurrence_p_values[sig[0]][sig[1]] = p
 
 class ACMDL_DocReader(DocReader):
 	def __init__(self,path, title_column, text_column, id_column, famcat_path=None, run_name=None, use_sglove=False):
@@ -335,7 +361,7 @@ if __name__ == "__main__":
 	parser.add_argument("--dataset", default="acm",type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
 	parser.add_argument("--name", default=None, type=str, help= "Name of this run (used when saving files.)")
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
-	parser.add_argument("--epochs", default = 100, type=int, help="The number of epochs to train GloVe for.")
+	parser.add_argument("--epochs", default = 26, type=int, help="The number of epochs to train GloVe for.")
 	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
 	parser.add_argument("--glove_x_max", default = 100.0, type=float, help="x_max parameter in GloVe.")
 	parser.add_argument("--glove_alpha", default = 0.75, type=float, help="alpha parameter in GloVe.")
@@ -388,5 +414,5 @@ if __name__ == "__main__":
 				logger.info("   **** Training GloVe for "+fc+": epoch %d, error %.5f" % (epoch, err))
 				if epoch and epoch % 25 == 0:
 					print_top_n_surps(model, reader)
-					save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_fc"+fc+"_epochs"+str(epoch))
-			save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_fc"+fc+"_epochs"+str(epoch))
+					save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+			save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))

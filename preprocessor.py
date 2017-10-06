@@ -11,7 +11,6 @@ from inflection import singularize
 from prettytable import PrettyTable
 import evaluate
 import random
-from scipy.stats import fisher_exact
 import fisher
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
@@ -34,19 +33,21 @@ def significance(w1_occurrence, w2_occurrence, cooccurrences, n_docs):
 	oddsratio, pvalue = fisher_exact(table, alternative="less")
 	return pvalue
 
+''' Old, slow scipy-based significance test.
 def significance_on_tuple(sig_tuple):
 	_, _, w1_occurrence, w2_occurrence, cooccurrences, n_docs = sig_tuple
 	table = [[cooccurrences,w2_occurrence-cooccurrences],[w1_occurrence,(n_docs-w1_occurrence)]]
 	oddsratio, pvalue = fisher_exact(table, alternative="less")
 	return pvalue
+'''
 
-def significance_on_tuple_fisherlib(sig_tuple):
+def significance_on_tuple(sig_tuple):
 	_, _, w1_occurrence, w2_occurrence, cooccurrences, n_docs = sig_tuple
 	pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence,(n_docs-w1_occurrence))
 	return pvalue.left_tail
 
 class DocReader(object):
-	def __init__(self,path,famcat_path, run_name=None, use_sglove=False, use_fisherlib=True):
+	def __init__(self,path,famcat_path, run_name=None, use_sglove=False):
 		self.filepath = path
 		self.run_name = run_name
 		self.famcat_filepath = famcat_path
@@ -67,7 +68,6 @@ class DocReader(object):
 		self.docs_per_fc = {}
 		self.cooccurrence_p_values = {}
 		self.use_sglove = use_sglove
-		self.use_fisherlib = use_fisherlib
 
 	def __iter__(self):
 		raise NotImplementedError
@@ -223,19 +223,16 @@ class DocReader(object):
 												self.word_occurrence[self.dictionary[w2]],
 												self.cooccurrence[w1][w2] if w2 in self.cooccurrence[w1] else 0,
 												self.total_docs))
-			if self.use_fisherlib:
-				computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple_fisherlib)(sig) for sig in sigs_to_compute)
-			else:
-				computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple)(sig) for sig in sigs_to_compute)
+			computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple)(sig) for sig in sigs_to_compute)
 			for sig,p in zip(sigs_to_compute,computed_sigs):
 				self.cooccurrence_p_values[sig[0]][sig[1]] = p
 
 class ACMDL_DocReader(DocReader):
-	def __init__(self,path, title_column, text_column, id_column, famcat_path=None, run_name=None, use_sglove=False, use_fisherlib=True):
+	def __init__(self,path, title_column, text_column, id_column, famcat_path=None, run_name=None, use_sglove=False):
 		self.title_column = title_column
 		self.text_column = text_column
 		self.id_column = id_column
-		DocReader.__init__(self,path,famcat_path, run_name=run_name, use_sglove=use_sglove, use_fisherlib=use_fisherlib)
+		DocReader.__init__(self,path,famcat_path, run_name=run_name, use_sglove=use_sglove)
 
 	def __iter__(self):
 		if self.first_pass and self.famcat_filepath is not None:
@@ -385,14 +382,12 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .preprocessed file.")
 	parser.add_argument("--use_sglove", action="store_true",
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
-	parser.add_argument("--use_fisherlib", action="store_true",
-						help="Use the fisher library's fisher_exact test rather than the (slower) one in scipy.")
 	parser.add_argument("--familiarity_categories", default=None, type=str,
 						help='The (optional) path to the file containing IDs and familiarity categories (omit the ".csv")')
 
 	args = parser.parse_args()
 	if args.dataset == "acm":
-		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories, run_name=args.name, use_sglove=args.use_sglove, use_fisherlib=args.use_fisherlib)
+		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
 		reader = WikiPlot_DocReader(args.inputfile)
 	else:

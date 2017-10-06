@@ -42,8 +42,7 @@ def significance_on_tuple(sig_tuple):
 
 def significance_on_tuple_fisherlib(sig_tuple):
 	_, _, w1_occurrence, w2_occurrence, cooccurrences, n_docs = sig_tuple
-	table = [[cooccurrences,w2_occurrence-cooccurrences],[w1_occurrence,(n_docs-w1_occurrence)]]
-	pvalue = fisher.pvalue(table)
+	pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence,(n_docs-w1_occurrence))
 	return pvalue.left_tail
 
 class DocReader(object):

@@ -111,7 +111,6 @@ class DocReader(object):
 			self.word_occurrence = {k:0.0 for k in self.dictionary.token2id.keys()}
 			self.cooccurrence = {wk:{} for wk in range(len(self.dictionary))}
 			for doc in self.documents:
-				self.total_docs += 1.0
 				for wk,wc in doc:
 					self.total_words += wc
 					self.word_occurrence[self.dictionary[wk]] += 1.0
@@ -130,7 +129,6 @@ class DocReader(object):
 			self.word_occurrence = {}
 
 			for doc,doc_fcs in zip(self.documents,self.doc_famcats):
-				self.total_docs += 1.0
 				for wk,wc in doc:
 					self.total_words += wc
 					for fc in doc_fcs:
@@ -252,6 +250,7 @@ class ACMDL_DocReader(DocReader):
 				#docwords = [self.lem.lemmatize(w,pos=get_wordnet_pos(t)) for w,t in docwords if w not in self.stop]
 
 				if self.first_pass:
+					self.total_docs += 1.0
 					self.doc_ids.append(row[self.id_column])
 					self.doc_titles.append(row[self.title_column])
 					self.doc_raws.append(row[self.text_column])
@@ -404,7 +403,7 @@ if __name__ == "__main__":
 		for epoch in range(args.epochs):
 			err = model.train(workers=cores, batch_size=1000, step_size=init_step_size/(1.0+epoch/step_size_decay))
 			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
-			if epoch and epoch % 50 == 0:
+			if epoch and epoch % 25 == 0:
 				print_top_n_surps(model, reader)
 				save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))
 		save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))

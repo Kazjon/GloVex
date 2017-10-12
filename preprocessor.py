@@ -369,11 +369,13 @@ if __name__ == "__main__":
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
 	parser.add_argument("--epochs", default = 26, type=int, help="The number of epochs to train GloVe for.")
 	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
+	parser.add_argument("--learning_rate_decay", default=25.0, type=float, help="LR is halved after this many epochs, divided by three after twice this, by four after three times this, etc.")
+	parser.add_argument("--print_surprise_every", default=25, type=int, help="Evaluate the whole dataset and print the most surprising every this number of epochs (time consuming).")
 	parser.add_argument("--glove_x_max", default = 100.0, type=float, help="x_max parameter in GloVe.")
 	parser.add_argument("--glove_alpha", default = 0.75, type=float, help="alpha parameter in GloVe.")
 	parser.add_argument("--no_below", default = 0.001, type=float,
 						help="Min fraction of documents a word must appear in to be included.")
-	parser.add_argument("--no_above", default = 0.75, type=float,
+	parser.add_argument("--no_above", default = 0.5, type=float,
 						help="Max fraction of documents a word can appear in to be included.")
 	parser.add_argument("--overwrite_model", action="store_true",
 						help="Ignore (and overwrite) existing .glovex file.")
@@ -393,32 +395,29 @@ if __name__ == "__main__":
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+	init_step_size = args.learning_rate
+	step_size_decay = 25.0
+	cores = multiprocessing.cpu_count() - 2
 	if args.familiarity_categories is None:
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, reader.cooccurrence_p_values, args.dims, args.glove_alpha, args.glove_x_max,
 							 args.overwrite_model, use_sglove=args.use_sglove)
 		logger.info(" ** Training GloVe")
-		init_step_size = args.learning_rate
-		step_size_decay = 10.0
-		cores = multiprocessing.cpu_count() - 2
 		for epoch in range(args.epochs):
-			err = model.train(workers=cores, batch_size=1000, step_size=init_step_size/(1.0+epoch/step_size_decay))
+			err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
 			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
-			if epoch and epoch % 25 == 0:
+			if epoch and epoch % args.print_surprise_every == 0:
 				print_top_n_surps(model, reader)
-				save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))
-		save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))
+				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+		save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
 	else:
 		for fc,fc_cooccurrence in reader.cooccurrence.iteritems():
 			model = glovex_model(args.inputfile, reader.argstring+"_fc"+fc, fc_cooccurrence, reader.cooccurrence_p_values[fc], args.dims, args.glove_alpha, args.glove_x_max,
 								 args.overwrite_model, use_sglove=args.use_sglove)
 			logger.info(" ** Training GloVe for "+fc)
-			init_step_size = args.learning_rate
-			step_size_decay = 10.0
-			cores = multiprocessing.cpu_count() - 1
 			for epoch in range(args.epochs):
 				err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
 				logger.info("   **** Training GloVe for "+fc+": epoch %d, error %.5f" % (epoch, err))
-				if epoch and epoch % 25 == 0:
+				if epoch and epoch % args.print_surprise_every == 0:
 					print_top_n_surps(model, reader)
 					save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
 			save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))

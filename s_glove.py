@@ -41,7 +41,7 @@ class Glove(object):
             for subkey in self.cooccurence[key]:
                 total_els += 1
 
-        # Worker function:
+        # Worker function:\
         def worker_train():
             error = np.zeros(1, dtype = np.float64)
             while True:

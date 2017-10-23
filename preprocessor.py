@@ -397,7 +397,7 @@ if __name__ == "__main__":
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
 	init_step_size = args.learning_rate
 	step_size_decay = 25.0
-	cores = multiprocessing.cpu_count() - 2
+	cores = multiprocessing.cpu_count() / 2
 	if args.familiarity_categories is None:
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, reader.cooccurrence_p_values, args.dims, args.glove_alpha, args.glove_x_max,
 							 args.overwrite_model, use_sglove=args.use_sglove)

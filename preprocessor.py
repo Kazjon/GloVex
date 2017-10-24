@@ -44,8 +44,11 @@ def significance_on_tuple(sig_tuple):
 
 def significance_on_tuple(sig_tuple):
 	_, _, w1_occurrence, w2_occurrence, cooccurrences, n_docs = sig_tuple
-	pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence,(n_docs-w1_occurrence))
+	pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence-cooccurrences,(n_docs-w1_occurrence-w2_occurrence+cooccurrences))
+	# pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence,(n_docs-w1_occurrence))
+	#print sig_tuple, pvalue.left_tail, pvalue.right_tail
 	return pvalue.left_tail
+
 
 def significance_on_tuple_batch(sig_tuple_batch):
 	return [significance_on_tuple(sig_tuple) for sig_tuple in sig_tuple_batch]
@@ -230,7 +233,7 @@ class DocReader(object):
 			sigs_sublists = [list(sl) for sl in np.array_split(sigs_to_compute,multiprocessing.cpu_count())]
 			computed_sigs = itertools.chain.from_iterable(Parallel(n_jobs=-1)(delayed(significance_on_tuple_batch)(sigs) for sigs in sigs_sublists))
 			for sig,p in zip(sigs_to_compute,computed_sigs):
-				print sig, p
+				#print sig, p
 				self.cooccurrence_p_values[sig[0]][sig[1]] = p
 
 class ACMDL_DocReader(DocReader):

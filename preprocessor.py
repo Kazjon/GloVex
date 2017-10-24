@@ -12,6 +12,7 @@ from prettytable import PrettyTable
 import evaluate
 import random
 import fisher
+import itertools
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
@@ -45,6 +46,9 @@ def significance_on_tuple(sig_tuple):
 	_, _, w1_occurrence, w2_occurrence, cooccurrences, n_docs = sig_tuple
 	pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence,(n_docs-w1_occurrence))
 	return pvalue.left_tail
+
+def significance_on_tuple_batch(sig_tuple_batch):
+	return [significance_on_tuple(sig_tuple) for sig_tuple in sig_tuple_batch]
 
 class DocReader(object):
 	def __init__(self,path,famcat_path, run_name=None, use_sglove=False):
@@ -221,8 +225,12 @@ class DocReader(object):
 												self.word_occurrence[self.dictionary[w2]],
 												self.cooccurrence[w1][w2] if w2 in self.cooccurrence[w1] else 0,
 												self.total_docs))
-			computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple)(sig) for sig in sigs_to_compute)
+			#computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple)(sig) for sig in sigs_to_compute)
+
+			sigs_sublists = [list(sl) for sl in np.array_split(sigs_to_compute,multiprocessing.cpu_count())]
+			computed_sigs = itertools.chain.from_iterable(Parallel(n_jobs=-1)(delayed(significance_on_tuple_batch)(sigs) for sigs in sigs_sublists))
 			for sig,p in zip(sigs_to_compute,computed_sigs):
+				print sig, p
 				self.cooccurrence_p_values[sig[0]][sig[1]] = p
 
 class ACMDL_DocReader(DocReader):

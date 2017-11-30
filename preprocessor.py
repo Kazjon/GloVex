@@ -27,7 +27,6 @@ def get_wordnet_pos(treebank_tag):
 
 class DocReader(object):
 	def __init__(self,path,famcat_path):
-		print 'Called __init__ of DocReader'
 		self.filepath = path
 		self.famcat_filepath = famcat_path
 		self.total_words = 0
@@ -47,26 +46,20 @@ class DocReader(object):
 		self.docs_per_fc = {}
 
 	def __iter__(self):
-		print 'Called __iter__ of the DocReader'
 		raise NotImplementedError
 
 	def load(self,preprocessed_path):
-		print 'Called load of the DocReader'
 		with open(preprocessed_path,"rb") as pro_f:
 			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc = pickle.load(pro_f)
 			self.famcats = self.cooccurrence.keys()
 			self.first_pass = False
 
 	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False):
-		print 'Called preprocess of the DocReader'
 		self.argstring = "_below"+str(no_below)+"_above"+str(no_above)
 		preprocessed_path = self.filepath+self.argstring+suffix
-		# print 'self.argstring', self.argstring
-		print 'self.first_pass', self.first_pass
 		if not os.path.exists(preprocessed_path) or force_overwrite:
 			logger.info(" ** Pre-processing started.")
 			self.dictionary = gensim.corpora.Dictionary(self)
-			print self.dictionary
 			logger.info("   **** Dictionary created.")
 			self.dictionary.filter_extremes(no_below=max(2,no_below*self.total_docs),no_above=no_above,keep_n=None)
 			logger.info("   **** Dictionary filtered.")
@@ -85,7 +78,6 @@ class DocReader(object):
 	#Note: Normalisation not implemented for personalised version (w/ famcats)
 	#Note: Not yet tracking total words and total docs per famcat -- may need to revisit this
 	def calc_cooccurrence(self, normalise = False):
-		print 'Called calc_cooccurrence of the DocReader'
 		if self.famcat_filepath is None:
 			self.word_occurrence = {k:0.0 for k in self.dictionary.token2id.keys()}
 			self.cooccurrence = {wk:{} for wk in range(len(self.dictionary))}
@@ -179,18 +171,14 @@ Create another class
 
 class ACMDL_DocReader(DocReader):
 	def __init__(self,path, title_column, text_column, id_column, famcat_path=None):
-		print 'Called __init__ of the ACMDL_DocReader'
 		self.title_column = title_column
 		self.text_column = text_column
 		self.id_column = id_column
 		DocReader.__init__(self,path,famcat_path)
 
 	def __iter__(self):
-		print 'Called __iter__ of the ACMDL_DocReader'
-		print 'Would it get into self.first_pass and self.famcat_filepath is not None', self.first_pass and self.famcat_filepath is not None
 		if self.first_pass and self.famcat_filepath is not None:
 			with io.open(self.famcat_filepath+".csv",mode="r",encoding='ascii',errors="ignore") as famcat_file:
-				print 'famcat_file', famcat_file
 				reader = csv.reader(famcat_file)
 				#famcats = {row[0]:(row[1:] if len(row) > 1 else []) for row in reader}
 
@@ -245,17 +233,13 @@ class WikiPlot_DocReader(DocReader):
 
 class Recipe_Reader(DocReader):
 	def __init__(self,path, text_column, id_column, famcat_path=None):
-		print 'Called __init__ of the Recipe_Reader'
 		self.text_column = text_column
 		self.id_column = id_column
 		DocReader.__init__(self,path,famcat_path)
 
 	def __iter__(self):
-		print 'Called __iter__ of the Recipe_Reader'
-		print 'Would it get into self.first_pass and self.famcat_filepath is not None', self.first_pass and self.famcat_filepath is not None
 		if self.first_pass and self.famcat_filepath is not None:
 			with io.open(self.famcat_filepath+".csv",mode="r",encoding='ascii',errors="ignore") as famcat_file:
-				print 'famcat_file', famcat_file
 				reader = csv.reader(famcat_file)
 				#famcats = {row[0]:(row[1:] if len(row) > 1 else []) for row in reader}
 

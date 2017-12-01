@@ -165,7 +165,9 @@ class DocReader(object):
 		#	print "self.cooccurrence[fc].keys():",self.cooccurrence[fc].keys()
 		#	print words_present.symmetric_difference(set(self.cooccurrence[fc].keys()))
 
-
+"""
+Create another class
+"""
 
 class ACMDL_DocReader(DocReader):
 	def __init__(self,path, title_column, text_column, id_column, famcat_path=None):
@@ -227,6 +229,34 @@ class WikiPlot_DocReader(DocReader):
 						doc_raw += line
 		if self.first_pass:
 			t_f.close()
+		self.first_pass = False
+
+class Recipe_Reader(DocReader):
+	def __init__(self,path, text_column, id_column, famcat_path=None):
+		self.text_column = text_column
+		self.id_column = id_column
+		DocReader.__init__(self,path,famcat_path)
+
+	def __iter__(self):
+		if self.first_pass and self.famcat_filepath is not None:
+			with io.open(self.famcat_filepath+".csv",mode="r",encoding='ascii',errors="ignore") as famcat_file:
+				reader = csv.reader(famcat_file)
+				#famcats = {row[0]:(row[1:] if len(row) > 1 else []) for row in reader}
+
+				#Hacks for working with fake author-based famcats
+				famcats = {row[0]:([n[0] for n in row[1:] if len(n)] if len(row) > 1 else ["None"]) for row in reader}
+				#famcats = {row[0]:["1"] if random.random() > 0.5 else ["1","2"] for row in reader}
+		with io.open(self.filepath + ".csv", mode="r", encoding='ascii', errors="ignore") as i_f:
+			for row in csv.DictReader(i_f):
+				docwords = [singularize(w) for w in self.tokeniser.tokenize((row[self.text_column]).lower()) if
+							w not in self.stop]
+				# If no frist pass, get the document IDs, text_column and famcats (if the famcat_filepath is not None)
+				if self.first_pass:
+					self.doc_ids.append(row[self.id_column])
+					self.doc_raws.append(row[self.text_column])
+					if self.famcat_filepath is not None:
+						self.doc_famcats.append(famcats[row[self.id_column]])
+				yield docwords
 		self.first_pass = False
 
 def glovex_model(filepath, argstring, cooccurrence, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex"):
@@ -324,6 +354,8 @@ if __name__ == "__main__":
 		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories)
 	elif args.dataset == "plots":
 		reader = WikiPlot_DocReader(args.inputfile)
+	elif args.dataset == "recipes":
+		reader = Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_path=args.familiarity_categories)
 	else:
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()

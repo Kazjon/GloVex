@@ -88,5 +88,11 @@ ENV/
 # Rope project settings
 .ropeproject
 
+# Jupyter notebooks: they are mostly used for experiments now
+.ipynb
+
 # Pycharm
 Icon
+
+# Results: we don't want to overload the repo with files about the results, since they can be shared on google drive
+results/

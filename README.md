@@ -23,3 +23,7 @@ Expectation modelling with GloVe
     -override_preprocessing: use it if a new preprocessing is needed
     
     —override_model: use it if a new model is needed
+
+	--familiarity_categories: default None
+		"fam_cat_file_path": the familiarity category file path; used with the input is ACMDL or WikiPlot datasets
+		"True": to add the categories from the same dataset file; used with the recipe dataset only

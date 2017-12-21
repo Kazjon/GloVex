@@ -243,25 +243,11 @@ class Recipe_Reader(DocReader):
 	def __init__(self,path, text_column, id_column, famcat_path=None):
 		self.text_column = text_column
 		self.id_column = id_column
+		self.fam_cat_column = 'cuisine'
 		DocReader.__init__(self,path,famcat_path)
 
 	# The iterator of the Recipe Document reader
 	def __iter__(self):
-		if self.first_pass and self.famcat_filepath is not None:
-			# with io.open(self.famcat_filepath+".csv",mode="r",encoding='ascii',errors="ignore") as famcat_file:
-			# 	reader = csv.reader(famcat_file)
-			# 	famcats = {row[0]:(row[1:] if len(row) > 1 else []) for row in reader}
-			with open(self.famcat_filepath + '.csv', 'rb') as csv_file:
-				reader = csv.reader(csv_file)
-				famcats_dict = dict(reader)
-			famcats = {}
-			for each_recipe in famcats_dict:
-				famcats[each_recipe] = famcats_dict[each_recipe].split(',')
-			# print famcats
-
-				# Hacks for working with fake author-based famcats
-				# famcats = {row[0]:([n[0] for n in row[1:] if len(n)] if len(row) > 1 else ["None"]) for row in reader}
-				# famcats = {row[0]:["1"] if random.random() > 0.5 else ["1","2"] for row in reader}
 		with io.open(self.filepath + ".csv", mode="r", encoding='ascii', errors="ignore") as i_f:
 			for row in csv.DictReader(i_f):
 				docwords = [singularize(w) for w in self.tokeniser.tokenize((row[self.text_column]).lower()) if
@@ -271,7 +257,7 @@ class Recipe_Reader(DocReader):
 					self.doc_ids.append(row[self.id_column])
 					self.doc_raws.append(row[self.text_column])
 					if self.famcat_filepath is not None:
-						self.doc_famcats.append(famcats[row[self.id_column]])
+						self.doc_famcats.append(row[self.fam_cat_column])
 				yield docwords
 		self.first_pass = False
 

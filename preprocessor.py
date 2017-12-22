@@ -230,8 +230,8 @@ class DocReader(object):
 												self.total_docs))
 			#computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple)(sig) for sig in sigs_to_compute)
 
-			sigs_sublists = [list(sl) for sl in np.array_split(sigs_to_compute,multiprocessing.cpu_count())]
-			computed_sigs = itertools.chain.from_iterable(Parallel(n_jobs=-1)(delayed(significance_on_tuple_batch)(sigs) for sigs in sigs_sublists))
+			sigs_sublists = [list(sl) for sl in np.array_split(sigs_to_compute,multiprocessing.cpu_count()/2)]
+			computed_sigs = itertools.chain.from_iterable(Parallel(n_jobs=multiprocessing.cpu_count()/2, max_nbytes=1e12)(delayed(significance_on_tuple_batch)(sigs) for sigs in sigs_sublists))
 			for sig,p in zip(sigs_to_compute,computed_sigs):
 				#print sig, p
 				self.cooccurrence_p_values[sig[0]][sig[1]] = p

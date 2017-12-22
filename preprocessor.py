@@ -1,4 +1,6 @@
-import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, glove, argparse, glob
+import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, argparse, glob
+import s_glove
+from glove import glove
 import cPickle as pickle
 import numpy as np
 from nltk.corpus import stopwords,wordnet
@@ -9,6 +11,8 @@ from inflection import singularize
 from prettytable import PrettyTable
 import evaluate
 import random
+import fisher
+import itertools
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
@@ -25,9 +29,34 @@ def get_wordnet_pos(treebank_tag):
 	else:
 		return wordnet.NOUN
 
+def significance(w1_occurrence, w2_occurrence, cooccurrences, n_docs):
+	table = [[cooccurrences,w2_occurrence-cooccurrences],[w1_occurrence,(n_docs-w1_occurrence)]]
+	oddsratio, pvalue = fisher_exact(table, alternative="less")
+	return pvalue
+
+''' Old, slow scipy-based significance test.
+def significance_on_tuple(sig_tuple):
+	_, _, w1_occurrence, w2_occurrence, cooccurrences, n_docs = sig_tuple
+	table = [[cooccurrences,w2_occurrence-cooccurrences],[w1_occurrence,(n_docs-w1_occurrence)]]
+	oddsratio, pvalue = fisher_exact(table, alternative="less")
+	return pvalue
+'''
+
+def significance_on_tuple(sig_tuple):
+	_, _, w1_occurrence, w2_occurrence, cooccurrences, n_docs = sig_tuple
+	pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence-cooccurrences,(n_docs-w1_occurrence-w2_occurrence+cooccurrences))
+	# pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence,(n_docs-w1_occurrence))
+	#print sig_tuple, pvalue.left_tail, pvalue.right_tail
+	return pvalue.left_tail
+
+
+def significance_on_tuple_batch(sig_tuple_batch):
+	return [significance_on_tuple(sig_tuple) for sig_tuple in sig_tuple_batch]
+
 class DocReader(object):
-	def __init__(self,path,famcat_path):
+	def __init__(self,path,famcat_path, run_name=None, use_sglove=False):
 		self.filepath = path
+		self.run_name = run_name
 		self.famcat_filepath = famcat_path
 		self.total_words = 0
 		self.total_docs = 0
@@ -44,18 +73,23 @@ class DocReader(object):
 		self.lem = WordNetLemmatizer()
 		self.famcats = []
 		self.docs_per_fc = {}
+		self.cooccurrence_p_values = {}
+		self.use_sglove = use_sglove
 
 	def __iter__(self):
 		raise NotImplementedError
 
 	def load(self,preprocessed_path):
 		with open(preprocessed_path,"rb") as pro_f:
-			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc = pickle.load(pro_f)
+			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove = pickle.load(pro_f)
 			self.famcats = self.cooccurrence.keys()
 			self.first_pass = False
 
 	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False):
-		self.argstring = "_below"+str(no_below)+"_above"+str(no_above)
+		if self.run_name is not None:
+			self.argstring = "_"+self.run_name+"_below"+str(no_below)+"_above"+str(no_above)
+		else:
+			self.argstring = "_below"+str(no_below)+"_above"+str(no_above)
 		preprocessed_path = self.filepath+self.argstring+suffix
 		if not os.path.exists(preprocessed_path) or force_overwrite:
 			logger.info(" ** Pre-processing started.")
@@ -67,8 +101,11 @@ class DocReader(object):
 			logger.info("   **** BoW representations constructed.")
 			self.calc_cooccurrence()
 			logger.info("   **** Co-occurrence matrix constructed.")
+			if self.use_sglove:
+				self.calc_cooccurrence_significance_parallel()
+				logger.info("   **** Co-occurrence signficance matrix calculated.")
 			with open(preprocessed_path,"wb") as pro_f:
-				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc),pro_f)
+				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove),pro_f)
 		else:
 			logger.info(" ** Existing pre-processed file found.  Rerun with --overwrite_preprocessing"+
 						" if you did not intend to reuse it.")
@@ -76,13 +113,11 @@ class DocReader(object):
 		logger.info(" ** Pre-processing complete.")
 
 	#Note: Normalisation not implemented for personalised version (w/ famcats)
-	#Note: Not yet tracking total words and total docs per famcat -- may need to revisit this
 	def calc_cooccurrence(self, normalise = False):
 		if self.famcat_filepath is None:
 			self.word_occurrence = {k:0.0 for k in self.dictionary.token2id.keys()}
 			self.cooccurrence = {wk:{} for wk in range(len(self.dictionary))}
 			for doc in self.documents:
-				self.total_docs += 1.0
 				for wk,wc in doc:
 					self.total_words += wc
 					self.word_occurrence[self.dictionary[wk]] += 1.0
@@ -95,34 +130,12 @@ class DocReader(object):
 			if normalise:
 				for wk,wv in self.dictionary.iteritems():
 					self.cooccurrence[wk] = {wk2:float(wv2)/self.word_occurrence[wv] for wk2,wv2 in self.cooccurrence[wk].iteritems()}
+
 		else:
 			self.cooccurrence = {}
 			self.word_occurrence = {}
 
-			'''#Original keys version
 			for doc,doc_fcs in zip(self.documents,self.doc_famcats):
-				self.total_docs += 1.0
-				for wk,wc in doc:
-					self.total_words += wc
-					for fc in doc_fcs:
-						if fc not in self.cooccurrence.keys():
-							self.cooccurrence[fc] = {}
-							self.word_occurrence[fc] = {}
-						try:
-							self.word_occurrence[fc][self.dictionary[wk]] += 1.0
-						except KeyError:
-							self.word_occurrence[fc][self.dictionary[wk]] = 1.0
-						if wk not in self.cooccurrence[fc].keys():
-							self.cooccurrence[fc][wk] = {}
-						for wk2,wc2 in doc:
-							if wk != wk2:
-								try:
-									self.cooccurrence[fc][wk][wk2] += 1.0
-								except KeyError:
-									self.cooccurrence[fc][wk][wk2] = 1.0
-			#'''
-			for doc,doc_fcs in zip(self.documents,self.doc_famcats):
-				self.total_docs += 1.0
 				for wk,wc in doc:
 					self.total_words += wc
 					for fc in doc_fcs:
@@ -154,27 +167,81 @@ class DocReader(object):
 									self.cooccurrence[fc][self.all_keys_to_per_fc_keys[fc][wk]][self.all_keys_to_per_fc_keys[fc][wk2]] += 1.0
 								except KeyError:
 									self.cooccurrence[fc][self.all_keys_to_per_fc_keys[fc][wk]][self.all_keys_to_per_fc_keys[fc][wk2]] = 1.0
-			#'''
-			self.famcats = self.cooccurrence.keys()
-		#for fc in self.cooccurrence.keys():
-		#	words_present = set()
-		#	for coocs in self.cooccurrence[fc].values():
-		#		words_present.update(coocs.keys())
-		#	print fc
-		#	print "words present:",words_present
-		#	print "self.cooccurrence[fc].keys():",self.cooccurrence[fc].keys()
-		#	print words_present.symmetric_difference(set(self.cooccurrence[fc].keys()))
 
-"""
-Create another class
-"""
+			self.famcats = self.cooccurrence.keys()
+
+	def calc_cooccurrence_significance(self):
+		if len(self.famcats):
+			for fc in self.famcats:
+				self.cooccurrence_p_values[fc] = {}
+				for w1 in self.cooccurrence[fc].keys():
+					if w1 not in self.cooccurrence_p_values[fc].keys():
+						self.cooccurrence_p_values[fc][w1] = {}
+					for w2 in self.cooccurrence[fc].keys():
+						if w1 != w2:
+							self.cooccurrence_p_values[fc][w1][w2] = significance(
+								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w1]]],
+								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w2]]],
+								self.cooccurrence[fc][w1][w2] if w2 in self.cooccurrence[fc][w1] else 0,
+								self.docs_per_fc[fc]
+							)
+		else:
+			self.cooccurrence_p_values = {}
+			for w1 in self.cooccurrence.keys():
+				if w1 not in self.cooccurrence_p_values.keys():
+					self.cooccurrence_p_values[w1] = {}
+				for w2 in self.cooccurrence.keys():
+					if w1 != w2:
+						self.cooccurrence_p_values[w1][w2] = significance(
+							self.word_occurrence[self.dictionary[w1]],
+							self.word_occurrence[self.dictionary[w2]],
+							self.cooccurrence[w1][w2] if w2 in self.cooccurrence[w1] else 0,
+							self.total_docs
+						)
+
+	def calc_cooccurrence_significance_parallel(self):
+		if len(self.famcats):
+			for fc in self.famcats:
+				self.cooccurrence_p_values[fc] = {}
+				for w1 in self.cooccurrence[fc].keys():
+					if w1 not in self.cooccurrence_p_values[fc].keys():
+						self.cooccurrence_p_values[fc][w1] = {}
+					for w2 in self.cooccurrence[fc].keys():
+						if w1 != w2:
+							self.cooccurrence_p_values[fc][w1][w2] = significance(
+								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w1]]],
+								self.word_occurrence[fc][self.dictionary[self.per_fc_keys_to_all_keys[fc][w2]]],
+								self.cooccurrence[fc][w1][w2] if w2 in self.cooccurrence[fc][w1] else 0,
+								self.docs_per_fc[fc]
+							)
+		else:
+			sigs_to_compute = []
+			self.cooccurrence_p_values = {}
+			for w1 in self.cooccurrence.keys():
+				if w1 not in self.cooccurrence_p_values.keys():
+					self.cooccurrence_p_values[w1] = {}
+				for w2 in self.cooccurrence.keys():
+					if w1 != w2:
+						sigs_to_compute.append((w1,
+												w2,
+												self.word_occurrence[self.dictionary[w1]],
+												self.word_occurrence[self.dictionary[w2]],
+												self.cooccurrence[w1][w2] if w2 in self.cooccurrence[w1] else 0,
+												self.total_docs))
+			#computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple)(sig) for sig in sigs_to_compute)
+
+			sigs_sublists = [list(sl) for sl in np.array_split(sigs_to_compute,multiprocessing.cpu_count()/2)]
+			computed_sigs = itertools.chain.from_iterable(Parallel(n_jobs=multiprocessing.cpu_count()/2, max_nbytes=1e12)(delayed(significance_on_tuple_batch)(sigs) for sigs in sigs_sublists))
+			for sig,p in zip(sigs_to_compute,computed_sigs):
+				#print sig, p
+				self.cooccurrence_p_values[sig[0]][sig[1]] = p
 
 class ACMDL_DocReader(DocReader):
-	def __init__(self,path, title_column, text_column, id_column, famcat_path=None):
+	def __init__(self,path, title_column, text_column, id_column, famcat_path=None, run_name=None, use_sglove=False):
 		self.title_column = title_column
 		self.text_column = text_column
 		self.id_column = id_column
-		DocReader.__init__(self,path,famcat_path)
+		DocReader.__init__(self,path,famcat_path, run_name=run_name, use_sglove=use_sglove)
 
 	def __iter__(self):
 		if self.first_pass and self.famcat_filepath is not None:
@@ -194,6 +261,7 @@ class ACMDL_DocReader(DocReader):
 				#docwords = [self.lem.lemmatize(w,pos=get_wordnet_pos(t)) for w,t in docwords if w not in self.stop]
 
 				if self.first_pass:
+					self.total_docs += 1.0
 					self.doc_ids.append(row[self.id_column])
 					self.doc_titles.append(row[self.title_column])
 					self.doc_raws.append(row[self.text_column])
@@ -259,11 +327,14 @@ class Recipe_Reader(DocReader):
 				yield docwords
 		self.first_pass = False
 
-def glovex_model(filepath, argstring, cooccurrence, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex"):
+def glovex_model(filepath, argstring, cooccurrence, p_values, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex", use_sglove=False):
 	model_path = filepath+argstring
 	model_files = glob.glob(model_path+"_epochs*"+suffix)
 	if not len(model_files) or force_overwrite:
-		model = glove.Glove(cooccurrence, d=dims, alpha=alpha, x_max=x_max)
+		if use_sglove:
+			model = s_glove.Glove(cooccurrence, p_values, d=dims, alpha=alpha)
+		else:
+			model = glove.Glove(cooccurrence, d=dims, alpha=alpha, x_max=x_max)
 	else:
 		highest_epochs = max([int(f.split("epochs")[1].split(".")[0]) for f in model_files])
 		logger.info(" ** Existing model file found.  Re-run with --overwrite_model if you did not intend to reuse it.")
@@ -333,25 +404,30 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Run GloVeX on some text.")
 	parser.add_argument("inputfile", help='The file path to work with (omit the ".csv")')
 	parser.add_argument("--dataset", default="acm",type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
+	parser.add_argument("--name", default=None, type=str, help= "Name of this run (used when saving files.)")
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
-	parser.add_argument("--epochs", default = 100, type=int, help="The number of epochs to train GloVe for.")
+	parser.add_argument("--epochs", default = 26, type=int, help="The number of epochs to train GloVe for.")
 	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
+	parser.add_argument("--learning_rate_decay", default=25.0, type=float, help="LR is halved after this many epochs, divided by three after twice this, by four after three times this, etc.")
+	parser.add_argument("--print_surprise_every", default=25, type=int, help="Evaluate the whole dataset and print the most surprising every this number of epochs (time consuming).")
 	parser.add_argument("--glove_x_max", default = 100.0, type=float, help="x_max parameter in GloVe.")
 	parser.add_argument("--glove_alpha", default = 0.75, type=float, help="alpha parameter in GloVe.")
 	parser.add_argument("--no_below", default = 0.001, type=float,
 						help="Min fraction of documents a word must appear in to be included.")
-	parser.add_argument("--no_above", default = 0.75, type=float,
+	parser.add_argument("--no_above", default = 0.5, type=float,
 						help="Max fraction of documents a word can appear in to be included.")
 	parser.add_argument("--overwrite_model", action="store_true",
 						help="Ignore (and overwrite) existing .glovex file.")
 	parser.add_argument("--overwrite_preprocessing", action="store_true",
 						help="Ignore (and overwrite) existing .preprocessed file.")
+	parser.add_argument("--use_sglove", action="store_true",
+						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
 	parser.add_argument("--familiarity_categories", default=None, type=str,
 						help='The (optional) path to the file containing IDs and familiarity categories (omit the ".csv")')
 
 	args = parser.parse_args()
 	if args.dataset == "acm":
-		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories)
+		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
 		reader = WikiPlot_DocReader(args.inputfile)
 	elif args.dataset == "recipes":
@@ -360,32 +436,29 @@ if __name__ == "__main__":
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+	init_step_size = args.learning_rate
+	step_size_decay = 25.0
+	cores = multiprocessing.cpu_count() / 2
 	if args.familiarity_categories is None:
-		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
-							 args.overwrite_model)
+		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, reader.cooccurrence_p_values, args.dims, args.glove_alpha, args.glove_x_max,
+							 args.overwrite_model, use_sglove=args.use_sglove)
 		logger.info(" ** Training GloVe")
-		init_step_size = args.learning_rate
-		step_size_decay = 10.0
-		cores = multiprocessing.cpu_count() - 2
 		for epoch in range(args.epochs):
-			err = model.train(workers=cores, batch_size=1000, step_size=init_step_size/(1.0+epoch/step_size_decay))
+			err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
 			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
-			if epoch and epoch % 50 == 0:
+			if epoch and epoch % args.print_surprise_every == 0:
 				print_top_n_surps(model, reader)
-				save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))
-		save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_epochs"+str(epoch))
+				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+		save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
 	else:
 		for fc,fc_cooccurrence in reader.cooccurrence.iteritems():
-			model = glovex_model(args.inputfile, reader.argstring+"_fc"+fc, fc_cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
-								 args.overwrite_model)
+			model = glovex_model(args.inputfile, reader.argstring+"_fc"+fc, fc_cooccurrence, reader.cooccurrence_p_values[fc], args.dims, args.glove_alpha, args.glove_x_max,
+								 args.overwrite_model, use_sglove=args.use_sglove)
 			logger.info(" ** Training GloVe for "+fc)
-			init_step_size = args.learning_rate
-			step_size_decay = 10.0
-			cores = multiprocessing.cpu_count() - 1
 			for epoch in range(args.epochs):
 				err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
 				logger.info("   **** Training GloVe for "+fc+": epoch %d, error %.5f" % (epoch, err))
-				if epoch and epoch % 50 == 0:
+				if epoch and epoch % args.print_surprise_every == 0:
 					print_top_n_surps(model, reader)
-					save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_fc"+fc+"_epochs"+str(epoch))
-			save_model(model, args.inputfile, "_below"+str(args.no_below)+"_above"+str(args.no_above)+"_fc"+fc+"_epochs"+str(epoch))
+					save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+			save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))

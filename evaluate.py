@@ -15,7 +15,7 @@ def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
-			surps = estimate_document_surprise_pairs(doc, model, acm, ignore_order=ignore_order)
+			surps = estimate_document_surprise_pairs(doc, model, acm.cooccurrence, acm.word_occurrence, acm.dictionary, acm.documents, use_sglove=acm.use_sglove, ignore_order=ignore_order)
 			if top_n_per_doc and len(surps) > top_n_per_doc:
 				surps = surps[:top_n_per_doc]
 			dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
@@ -30,9 +30,9 @@ def document_surprise(surps, percentile=95):
 		return np.percentile([x[2] for x in surps], 100-percentile) #note that percentile calculates the highest.
 	return float("inf")
 
-def estimate_document_surprise_pairs(doc, model, acm, top_n_per_doc = 0, ignore_order=True):
-	est_cooc_mat = estimate_document_cooccurrence_matrix(doc, model, acm.cooccurrence, use_sglove=acm.use_sglove)
-	surps = document_cooccurrence_to_surprise(doc, est_cooc_mat, acm.word_occurrence, acm.dictionary, len(acm.documents), ignore_order=ignore_order)
+def estimate_document_surprise_pairs(doc, model, cooccurrence, word_occurrence, dictionary, documents, use_sglove=False, top_n_per_doc = 0, ignore_order=True):
+	est_cooc_mat = estimate_document_cooccurrence_matrix(doc, model, cooccurrence, use_sglove=use_sglove)
+	surps = document_cooccurrence_to_surprise(doc, est_cooc_mat, word_occurrence, dictionary, len(documents), ignore_order=ignore_order)
 	surps.sort(key = lambda x: x[2])
 	if top_n_per_doc and len(surps) > top_n_per_doc:
 		return surps[:top_n_per_doc]

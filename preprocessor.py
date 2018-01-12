@@ -9,7 +9,7 @@ from nltk.tokenize import RegexpTokenizer
 from joblib import Parallel, delayed
 from inflection import singularize
 from prettytable import PrettyTable
-import evaluate
+import evaluate, evaluate_personalised
 import random
 import fisher
 import itertools
@@ -251,7 +251,7 @@ class ACMDL_DocReader(DocReader):
 		self.text_column = text_column
 		self.id_column = id_column
 		self.famcat_column = famcat_column
-		DocReader.__init__(self,path, run_name=run_name, use_sglove=use_sglove)
+		DocReader.__init__(self,path, run_name=run_name, use_sglove=use_sglove, use_famcats=famcat_column is not None)
 
 	# The iterator of the ACMDL Document reader
 	def __iter__(self):
@@ -313,7 +313,7 @@ class Recipe_Reader(DocReader):
 		self.text_column = text_column
 		self.id_column = id_column
 		self.famcat_column = famcat_column
-		DocReader.__init__(self,path)
+		DocReader.__init__(self,path, use_famcats=famcat_column is not None)
 
 	# The iterator of the Recipe Document reader
 	def __iter__(self):
@@ -362,12 +362,19 @@ def load_personalised_models(filepath, docreader):
 	return models
 
 # Print top n surprise scores function
-def print_top_n_surps(model, acm, top_n):
-
+def print_top_n_surps(model, reader, top_n, famcat=None):
 	top_surps = []
-	for doc in acm.documents:
+	for doc in reader.documents:
 		if len(doc):
-			top_surps += evaluate.estimate_document_surprise_pairs(doc, model, acm)[:10]
+			if famcat is None:
+				top_surps += evaluate.estimate_document_surprise_pairs(doc, model, reader.cooccurrence,
+																	   reader.word_occurrence, reader.dictionary,
+																	   reader.documents, use_sglove=reader.use_sglove)[:10]
+			else:
+				# NOTE: This doesn't currently work because the difference in IDs between the per-FC coocurrences and the global ones.  Need to rework it to involve calls to all_keys_to_per_fc_keys
+				top_surps += evaluate.estimate_document_surprise_pairs(doc, model, reader.cooccurrence[famcat],
+																	   reader.word_occurrence[famcat], reader.dictionary,
+																	   reader.documents, use_sglove=reader.use_sglove)[:10]
 			top_surps = list(set(top_surps))
 			top_surps.sort(key = lambda x: x[2], reverse=False)
 			top_surps = top_surps[:top_n]
@@ -382,20 +389,36 @@ def print_top_n_surps(model, acm, top_n):
 	obs_coocs = []
 	obs_surps = []
 	for surp in top_surps:
-		w1s.append(surp[0])
-		w2s.append(surp[1])
-		w1_occ = acm.word_occurrence[surp[0]]
-		w2_occ = acm.word_occurrence[surp[1]]
-		w1_occs.append(w1_occ)
-		w2_occs.append(w2_occ)
-		est_surps.append(surp[2])
-		wk1 = acm.dictionary.token2id[surp[0]]
-		wk2 = acm.dictionary.token2id[surp[1]]
-		est_coocs.append(evaluate.estimate_word_pair_cooccurrence(wk1, wk2, model, acm.cooccurrence))
-		w1_w2_cooccurrence = acm.cooccurrence[wk1][wk2]
-		obs_coocs.append(w1_w2_cooccurrence)
-		obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, len(acm.documents))
-		obs_surps.append(obs_surp)
+		if famcat is None:
+			w1s.append(surp[0])
+			w2s.append(surp[1])
+			w1_occ = reader.word_occurrence[surp[0]]
+			w2_occ = reader.word_occurrence[surp[1]]
+			w1_occs.append(w1_occ)
+			w2_occs.append(w2_occ)
+			est_surps.append(surp[2])
+			wk1 = reader.dictionary.token2id[surp[0]]
+			wk2 = reader.dictionary.token2id[surp[1]]
+			est_coocs.append(evaluate.estimate_word_pair_cooccurrence(wk1, wk2, model, reader.cooccurrence))
+			w1_w2_cooccurrence = reader.cooccurrence[wk1][wk2]
+			obs_coocs.append(w1_w2_cooccurrence)
+			obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, len(reader.documents))
+			obs_surps.append(obs_surp)
+		else:
+			w1s.append(surp[0])
+			w2s.append(surp[1])
+			w1_occ = reader.word_occurrence[famcat][surp[0]]
+			w2_occ = reader.word_occurrence[famcat][surp[1]]
+			w1_occs.append(w1_occ)
+			w2_occs.append(w2_occ)
+			est_surps.append(surp[2])
+			wk1 = reader.all_keys_to_per_fc_keys[fc][reader.dictionary.token2id[surp[0]]]
+			wk2 = reader.all_keys_to_per_fc_keys[fc][reader.dictionary.token2id[surp[1]]]
+			est_coocs.append(evaluate.estimate_word_pair_cooccurrence(wk1, wk2, model, reader.cooccurrence[famcat]))
+			w1_w2_cooccurrence = reader.cooccurrence[famcat][wk1][wk2]
+			obs_coocs.append(w1_w2_cooccurrence)
+			obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, len(reader.documents))
+			obs_surps.append(obs_surp)
 
 	tab = PrettyTable()
 	tab.add_column("Word 1",w1s)
@@ -417,7 +440,7 @@ if __name__ == "__main__":
 	parser.add_argument("--dataset", default="acm",type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
 	parser.add_argument("--name", default=None, type=str, help= "Name of this run (used when saving files.)")
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
-	parser.add_argument("--epochs", default = 26, type=int, help="The number of epochs to train GloVe for.")
+	parser.add_argument("--epochs", default = 25, type=int, help="The number of epochs to train GloVe for.")
 	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
 	parser.add_argument("--learning_rate_decay", default=25.0, type=float, help="LR is halved after this many epochs, divided by three after twice this, by four after three times this, etc.")
 	parser.add_argument("--print_surprise_every", default=25, type=int, help="Evaluate the whole dataset and print the most surprising every this number of epochs (time consuming).")
@@ -458,7 +481,7 @@ if __name__ == "__main__":
 	# If the familiarity categories (fam_cat) are unknown
 	if not args.use_famcats:
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
-							 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values)
+							 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values if args.use_sglove else None)
 		logger.info(" ** Training GloVe")
 		for epoch in range(args.epochs):
 			err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
@@ -473,7 +496,7 @@ if __name__ == "__main__":
 		for fc,fc_cooccurrence in reader.cooccurrence.iteritems():
 			# Pass the familiarity category (fam_cat) file to the glovex_model function
 			model = glovex_model(args.inputfile, reader.argstring+"_fc"+fc, fc_cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
-								 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values[fc])
+								 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values[fc] if args.use_sglove else None)
 
 			logger.info(" ** Training GloVe for "+fc)
 			for epoch in range(args.epochs):
@@ -481,5 +504,5 @@ if __name__ == "__main__":
 				logger.info("   **** Training GloVe for "+fc+": epoch %d, error %.5f" % (epoch, err))
 			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
 					top_n = 50
-					print_top_n_surps(model, reader, top_n)
+					print_top_n_surps(model, reader, top_n, famcat=fc)
 					save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))

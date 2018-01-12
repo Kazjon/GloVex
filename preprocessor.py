@@ -315,7 +315,7 @@ class Recipe_Reader(DocReader):
 	def __init__(self,path, text_column, id_column, famcat_path=None):
 		self.text_column = text_column
 		self.id_column = id_column
-    self.fam_cat_column = 'cuisine'
+		self.fam_cat_column = 'cuisine'
 		DocReader.__init__(self,path,famcat_path)
 
 	# The iterator of the Recipe Document reader
@@ -336,17 +336,17 @@ class Recipe_Reader(DocReader):
 # Glovex model builder
 def glovex_model(filepath, argstring, cooccurrence, dims=100, alpha=0.75, x_max=100, force_overwrite = False, suffix = ".glovex", use_sglove=False, p_values=None):
 	# Get all file names with .glovex extension in the model's path
-  model_path = filepath+argstring
+	model_path = filepath+argstring
 	model_files = glob.glob(model_path+"_epochs*"+suffix)
 	if not len(model_files) or force_overwrite:
-    # If no model exists or it is forced to overwrite the old model, create a new model
+		# If no model exists or it is forced to overwrite the old model, create a new model
 		if use_sglove:
 			model = s_glove.Glove(cooccurrence, p_values, d=dims, alpha=alpha)
 		else:
 			model = glove.Glove(cooccurrence, d=dims, alpha=alpha, x_max=x_max)
 	else:
-  	# If a model exists and no overwrite is forced, use the existing model at its last trained epoch	
-    highest_epochs = max([int(f.split("epochs")[1].split(".")[0]) for f in model_files])
+		# If a model exists and no overwrite is forced, use the existing model at its last trained epoch
+		highest_epochs = max([int(f.split("epochs")[1].split(".")[0]) for f in model_files])
 		logger.info(" ** Existing model file found.  Re-run with --overwrite_model if you did not intend to reuse it.")
 		with open(model_path+"_epochs"+str(highest_epochs)+suffix,"rb") as pro_f:
 			model = pickle.load(pro_f)
@@ -458,7 +458,7 @@ if __name__ == "__main__":
 	step_size_decay = 25.0
 	cores = multiprocessing.cpu_count() / 2
 
-  # If the familiarity categories (fam_cat) are unknown
+	# If the familiarity categories (fam_cat) are unknown
 	if args.familiarity_categories is None:
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 							 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values)
@@ -473,11 +473,11 @@ if __name__ == "__main__":
 				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
 		save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
 
-  # If the familiarity categories (fam_cat) are known
+	# If the familiarity categories (fam_cat) are known
 	else:
 		for fc,fc_cooccurrence in reader.cooccurrence.iteritems():
 			# Pass the familiarity category (fam_cat) file to the glovex_model function
-      model = glovex_model(args.inputfile, reader.argstring+"_fc"+fc, fc_cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
+			model = glovex_model(args.inputfile, reader.argstring+"_fc"+fc, fc_cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 								 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values[fc])
 
 			logger.info(" ** Training GloVe for "+fc)
@@ -485,7 +485,7 @@ if __name__ == "__main__":
 				err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
 				logger.info("   **** Training GloVe for "+fc+": epoch %d, error %.5f" % (epoch, err))
 				if epoch and epoch % args.print_surprise_every == 0:
-          top_n = 50
+					top_n = 50
 					print_top_n_surps(model, reader, top_n)
 					save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
 			save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))

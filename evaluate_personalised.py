@@ -39,6 +39,23 @@ def estimate_personalised_document_surprise_pairs(doc, models, acm, user, top_n_
 	combine_surprise(surps, {fc:f for fc,f in zip(acm.famcats,user)})
 	return surps
 
+def estimate_personalised_document_surprise_pairs_one_fc(doc, model, fc, acm, top_n_per_doc = 0, ignore_order=True):
+	surps = {}
+	rekeyed_doc = [(acm.all_keys_to_per_fc_keys[fc][k],v) for k,v in doc if k in acm.all_keys_to_per_fc_keys[fc].keys()]
+	est_cooc_mat = estimate_document_cooccurrence_matrix(rekeyed_doc,model,acm.cooccurrence[fc])
+
+	#This is what's in the non-pers version, need to compare this to the below and see why the returns are in a different format
+	#surps = document_cooccurrence_to_surprise(doc, est_cooc_mat, word_occurrence, dictionary, len(documents), ignore_order=ignore_order)
+
+	surps_list = document_cooccurrence_to_surprise(surps, fc, rekeyed_doc, est_cooc_mat, acm.word_occurrence[fc], acm.dictionary, acm.per_fc_keys_to_all_keys[fc], acm.docs_per_fc[fc], ignore_order=ignore_order)
+
+	#May also need to un-re-key on the way out
+	# This is what's in the non-pers version, in which the above call seems to return a list:
+	surps_list.sort(key = lambda x: x[2])
+	if top_n_per_doc and len(surps_list) > top_n_per_doc:
+		return surps_list[:top_n_per_doc]
+	return surps_list
+
 def combine_surprise(surps, user):
 	for w1,w1_pairs in surps.iteritems():
 		for w2 in w1_pairs:
@@ -97,8 +114,9 @@ def top_n_surps_from_doc(doc, model, cooccurrence, word_occurrence, dictionary, 
 	else:
 		return []
 
-#Returns an ordered list of most-to-least surprising word combinations as (w1,w2,surprise) tuples
+#Returns an ordered list of most-to-least surprising word combinations as (w1,w2,surprise) tuples, also updates surp dictionary it's provided
 def document_cooccurrence_to_surprise(surps, fc, doc, cooc_mat, word_occurrence, dictionary, key_map, n_docs, ignore_order=True):
+	surp_list = []
 	for i1,i2 in zip(*np.triu_indices(cooc_mat.shape[0],k=1,m=cooc_mat.shape[1])):
 		w1 = doc[i1][0]
 		w2 = doc[i2][0]
@@ -110,6 +128,8 @@ def document_cooccurrence_to_surprise(surps, fc, doc, cooc_mat, word_occurrence,
 				surps[key_map[w1]][key_map[w2]] = [(fc,s)]
 			else:
 				surps[key_map[w1]][key_map[w2]].append((fc,s))
+			surp_list.append((dictionary[key_map[w1]], dictionary[key_map[w2]], s))
+	return surp_list
 
 #Return the surprises from the given list that have the most similar feature word (i.e. w1) to the one in the given surp.
 def most_similar_features(surp, surp_list, model, dictionary, n = 10):

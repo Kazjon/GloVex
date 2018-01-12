@@ -87,7 +87,10 @@ class DocReader(object):
 	# Load function (using pickle) for document reader
 	def load(self,preprocessed_path):
 		with open(preprocessed_path,"rb") as pro_f:
-			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove, self.use_famcats = pickle.load(pro_f)
+			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, \
+			self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys,\
+			self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove, self.use_famcats \
+				= pickle.load(pro_f)
 			self.famcats = self.cooccurrence.keys()
 			self.first_pass = False
 
@@ -112,7 +115,10 @@ class DocReader(object):
 				self.calc_cooccurrence_significance_parallel()
 				logger.info("   **** Co-occurrence signficance matrix calculated.")
 			with open(preprocessed_path,"wb") as pro_f:
-				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove, self.use_famcats),pro_f)
+				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs,
+							 self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys,
+							 self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove,
+							 self.use_famcats),pro_f)
 		else:
 			logger.info(" ** Existing pre-processed file found.  Rerun with --overwrite_preprocessing"+
 						" if you did not intend to reuse it.")
@@ -372,9 +378,7 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 																	   reader.documents, use_sglove=reader.use_sglove)[:10]
 			else:
 				# NOTE: This doesn't currently work because the difference in IDs between the per-FC coocurrences and the global ones.  Need to rework it to involve calls to all_keys_to_per_fc_keys
-				top_surps += evaluate.estimate_document_surprise_pairs(doc, model, reader.cooccurrence[famcat],
-																	   reader.word_occurrence[famcat], reader.dictionary,
-																	   reader.documents, use_sglove=reader.use_sglove)[:10]
+				top_surps += evaluate_personalised.estimate_personalised_document_surprise_pairs_one_fc(doc, model, famcat, reader)[:10]
 			top_surps = list(set(top_surps))
 			top_surps.sort(key = lambda x: x[2], reverse=False)
 			top_surps = top_surps[:top_n]
@@ -412,10 +416,13 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 			w1_occs.append(w1_occ)
 			w2_occs.append(w2_occ)
 			est_surps.append(surp[2])
-			wk1 = reader.all_keys_to_per_fc_keys[fc][reader.dictionary.token2id[surp[0]]]
-			wk2 = reader.all_keys_to_per_fc_keys[fc][reader.dictionary.token2id[surp[1]]]
-			est_coocs.append(evaluate.estimate_word_pair_cooccurrence(wk1, wk2, model, reader.cooccurrence[famcat]))
-			w1_w2_cooccurrence = reader.cooccurrence[famcat][wk1][wk2]
+			fc_wk1 = reader.all_keys_to_per_fc_keys[fc][reader.dictionary.token2id[surp[0]]]
+			fc_wk2 = reader.all_keys_to_per_fc_keys[fc][reader.dictionary.token2id[surp[1]]]
+			est_coocs.append(evaluate_personalised.estimate_word_pair_cooccurrence(fc_wk1, fc_wk2, model, reader.cooccurrence[famcat]))
+			try:
+				w1_w2_cooccurrence = reader.cooccurrence[famcat][fc_wk1][fc_wk2]
+			except KeyError:
+				w1_w2_cooccurrence = 0
 			obs_coocs.append(w1_w2_cooccurrence)
 			obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, len(reader.documents))
 			obs_surps.append(obs_surp)

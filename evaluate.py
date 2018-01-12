@@ -31,7 +31,7 @@ def document_surprise(surps, percentile=95):
 	return float("inf")
 
 def estimate_document_surprise_pairs(doc, model, acm, top_n_per_doc = 0, ignore_order=True):
-	est_cooc_mat = estimate_document_cooccurrence_matrix(doc,model,acm.cooccurrence)
+	est_cooc_mat = estimate_document_cooccurrence_matrix(doc, model, acm.cooccurrence, use_sglove=acm.use_sglove)
 	surps = document_cooccurrence_to_surprise(doc, est_cooc_mat, acm.word_occurrence, acm.dictionary, len(acm.documents), ignore_order=ignore_order)
 	surps.sort(key = lambda x: x[2])
 	if top_n_per_doc and len(surps) > top_n_per_doc:
@@ -53,25 +53,28 @@ def extract_document_cooccurrence_matrix(doc, coocurrence):
 		cooc_mat[i1,i2] = coocurrence[d1][d2]
 	return cooc_mat
 
-def estimate_word_pair_cooccurrence(wk1, wk2, model, cooccurrence):
+def estimate_word_pair_cooccurrence(wk1, wk2, model, cooccurrence, use_sglove = False):
 	# take dot product of vectors
 	cooc = np.dot(model.W[wk1],model.ContextW[wk2]) + model.b[wk1] + model.ContextB[wk2]
-	# correct for the rare feature scaling described in https://nlp.stanford.edu/pubs/glove.pdf
-	if cooccurrence[wk1][wk2] < model.x_max:
+	if use_sglove:
+		# correct for the significantly-less-than-unconditional-likelihood scaling in s_glove
+		cooc = cooc
+	elif cooccurrence[wk1][wk2] < model.x_max:
+		# correct for the rare feature scaling described in https://nlp.stanford.edu/pubs/glove.pdf
 		cooc *= 1.0/pow(cooccurrence[wk1][wk2] / model.x_max,model.alpha)
 	return cooc[0]
 
-def estimate_document_cooccurrence_matrix(doc, model, cooccurrence):
+def estimate_document_cooccurrence_matrix(doc, model, cooccurrence, use_sglove = False):
 	cooc_mat = np.zeros([len(doc),len(doc)])
 	for i1,i2 in itertools.combinations(range(len(doc)),2):
 		d1 = doc[i1][0]
 		d2 = doc[i2][0]
-		cooc_mat[i1,i2] = estimate_word_pair_cooccurrence(d1, d2, model, cooccurrence)
+		cooc_mat[i1,i2] = estimate_word_pair_cooccurrence(d1, d2, model, cooccurrence, use_sglove=use_sglove)
 	return np.triu(np.exp(cooc_mat), k=1)
 
-def top_n_surps_from_doc(doc, model, cooccurrence, word_occurrence, dictionary, n_docs, top_n = 10):
+def top_n_surps_from_doc(doc, model, cooccurrence, word_occurrence, dictionary, n_docs, top_n = 10, use_sglove = False):
 	if len(doc):
-		est_cooc_mat = estimate_document_cooccurrence_matrix(doc,model,cooccurrence)
+		est_cooc_mat = estimate_document_cooccurrence_matrix(doc,model,cooccurrence, use_sglove=use_sglove)
 		surps = document_cooccurrence_to_surprise(doc, est_cooc_mat, word_occurrence, dictionary, n_docs)
 		surps.sort(key = lambda x: x[2], reverse=False)
 		return surps[:min(top_n,len(surps))]

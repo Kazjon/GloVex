@@ -13,6 +13,7 @@ import evaluate
 import random
 import fisher
 import itertools
+from scipy.stats import fisher_exact
 
 # Logging info from Glovex messages
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)

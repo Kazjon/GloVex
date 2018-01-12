@@ -57,10 +57,9 @@ def significance_on_tuple_batch(sig_tuple_batch):
 
 #Document reader class
 class DocReader(object):
-	def __init__(self,path,famcat_path, run_name=None, use_sglove=False):
+	def __init__(self,path, run_name=None, use_famcats=False, use_sglove=False):
 		self.filepath = path
 		self.run_name = run_name
-		self.famcat_filepath = famcat_path
 		self.total_words = 0
 		self.total_docs = 0
 		self.stop = set(stopwords.words("english"))
@@ -78,6 +77,7 @@ class DocReader(object):
 		self.docs_per_fc = {}
 		self.cooccurrence_p_values = {}
 		self.use_sglove = use_sglove
+		self.use_famcats = use_famcats
 
 	# Document reader iterator not implemented
 	def __iter__(self):
@@ -86,7 +86,7 @@ class DocReader(object):
 	# Load function (using pickle) for document reader
 	def load(self,preprocessed_path):
 		with open(preprocessed_path,"rb") as pro_f:
-			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove = pickle.load(pro_f)
+			self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove, self.use_famcats = pickle.load(pro_f)
 			self.famcats = self.cooccurrence.keys()
 			self.first_pass = False
 
@@ -111,7 +111,7 @@ class DocReader(object):
 				self.calc_cooccurrence_significance_parallel()
 				logger.info("   **** Co-occurrence signficance matrix calculated.")
 			with open(preprocessed_path,"wb") as pro_f:
-				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove),pro_f)
+				pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.doc_famcats, self.per_fc_keys_to_all_keys, self.all_keys_to_per_fc_keys, self.docs_per_fc, self.cooccurrence_p_values, self.use_sglove, self.use_famcats),pro_f)
 		else:
 			logger.info(" ** Existing pre-processed file found.  Rerun with --overwrite_preprocessing"+
 						" if you did not intend to reuse it.")
@@ -121,7 +121,7 @@ class DocReader(object):
 	# Calculate cooccurrence function of the Document reader
 	#Note: Normalisation not implemented for personalised version (w/ famcats)
 	def calc_cooccurrence(self, normalise = False):
-		if self.famcat_filepath is None:
+		if not self.use_famcats:
 			self.word_occurrence = {k:0.0 for k in self.dictionary.token2id.keys()}
 			self.cooccurrence = {wk:{} for wk in range(len(self.dictionary))}
 			for doc in self.documents:
@@ -178,7 +178,7 @@ class DocReader(object):
 			self.famcats = self.cooccurrence.keys()
 
 	def calc_cooccurrence_significance(self):
-		if len(self.famcats):
+		if self.use_famcats:
 			for fc in self.famcats:
 				self.cooccurrence_p_values[fc] = {}
 				for w1 in self.cooccurrence[fc].keys():
@@ -207,7 +207,7 @@ class DocReader(object):
 						)
 
 	def calc_cooccurrence_significance_parallel(self):
-		if len(self.famcats):
+		if self.use_famcats:
 			for fc in self.famcats:
 				self.cooccurrence_p_values[fc] = {}
 				for w1 in self.cooccurrence[fc].keys():
@@ -245,22 +245,15 @@ class DocReader(object):
 
 # ACMDL Document reader which is a subclass of the Document reader
 class ACMDL_DocReader(DocReader):
-	def __init__(self,path, title_column, text_column, id_column, famcat_path=None, run_name=None, use_sglove=False):
+	def __init__(self,path, title_column, text_column, id_column, famcat_column=None, run_name=None, use_sglove=False):
 		self.title_column = title_column
 		self.text_column = text_column
 		self.id_column = id_column
-		DocReader.__init__(self,path,famcat_path, run_name=run_name, use_sglove=use_sglove)
+		self.famcat_column = famcat_column
+		DocReader.__init__(self,path, run_name=run_name, use_sglove=use_sglove)
 
 	# The iterator of the ACMDL Document reader
 	def __iter__(self):
-		if self.first_pass and self.famcat_filepath is not None:
-			with io.open(self.famcat_filepath+".csv",mode="r",encoding='ascii',errors="ignore") as famcat_file:
-				reader = csv.reader(famcat_file)
-				famcats = {row[0]:(row[1:] if len(row) > 1 else []) for row in reader}
-
-				# Hacks for working with fake author-based famcats
-				# famcats = {row[0]:([n[0] for n in row[1:] if len(n)] if len(row) > 1 else ["None"]) for row in reader}
-				# famcats = {row[0]:["1"] if random.random() > 0.5 else ["1","2"] for row in reader}
 		with io.open(self.filepath+".csv",mode="r",encoding='ascii',errors="ignore") as i_f:
 			for row in csv.DictReader(i_f):
 				docwords = [singularize(w) for w in self.tokeniser.tokenize((row[self.title_column]+" "+row[self.text_column]).lower()) if w not in self.stop]
@@ -274,8 +267,11 @@ class ACMDL_DocReader(DocReader):
 					self.doc_ids.append(row[self.id_column])
 					self.doc_titles.append(row[self.title_column])
 					self.doc_raws.append(row[self.text_column])
-					if self.famcat_filepath is not None:
-						self.doc_famcats.append(famcats[row[self.id_column]])
+					if self.use_famcats:
+						#Hack for including fake random famcats
+						row[self.famcat_column] = ["cat1"] if random.random() > 0.5 else ["cat2"]
+
+						self.doc_famcats.append(row[self.famcat_column])
 				yield docwords
 		self.first_pass = False
 
@@ -312,11 +308,11 @@ class WikiPlot_DocReader(DocReader):
 
 # Recipe Document reader
 class Recipe_Reader(DocReader):
-	def __init__(self,path, text_column, id_column, famcat_path=None):
+	def __init__(self,path, text_column, id_column, famcat_column=None):
 		self.text_column = text_column
 		self.id_column = id_column
-		self.fam_cat_column = 'cuisine'
-		DocReader.__init__(self,path,famcat_path)
+		self.famcat_column = famcat_column
+		DocReader.__init__(self,path)
 
 	# The iterator of the Recipe Document reader
 	def __iter__(self):
@@ -324,12 +320,12 @@ class Recipe_Reader(DocReader):
 			for row in csv.DictReader(i_f):
 				docwords = [singularize(w) for w in self.tokeniser.tokenize((row[self.text_column]).lower()) if
 							w not in self.stop]
-				# If not first pass, get the document IDs, text_column and famcats (if the famcat_filepath is not None)
+				# If not first pass, get the document IDs, text_column and famcats (if self.use_famcats)
 				if self.first_pass:
 					self.doc_ids.append(row[self.id_column])
 					self.doc_raws.append(row[self.text_column])
-					if self.famcat_filepath is not None:
-						self.doc_famcats.append(row[self.fam_cat_column])
+					if self.use_famcats:
+						self.doc_famcats.append(row[self.famcat_column])
 				yield docwords
 		self.first_pass = False
 
@@ -436,17 +432,17 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .preprocessed file.")
 	parser.add_argument("--use_sglove", action="store_true",
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
-	parser.add_argument("--familiarity_categories", default=None, type=str,
-						help='The (optional) path to the file containing IDs and familiarity categories (omit the ".csv")')
+	parser.add_argument("--use_famcats", action="store_true",
+						help="Whether to train a personalised surprise model using familiarity categories.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
 	if args.dataset == "acm":
-		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_path=args.familiarity_categories, run_name=args.name, use_sglove=args.use_sglove)
+		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_column="category" if args.use_famcats else None, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
 		reader = WikiPlot_DocReader(args.inputfile)
 	elif args.dataset == "recipes":
-		reader = Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_path=args.familiarity_categories)
+		reader = Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_column="cuisine" if args.use_famcats else None)
 	else:
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
@@ -459,7 +455,7 @@ if __name__ == "__main__":
 	cores = multiprocessing.cpu_count() / 2
 
 	# If the familiarity categories (fam_cat) are unknown
-	if args.familiarity_categories is None:
+	if not args.use_famcats:
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 							 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values)
 		logger.info(" ** Training GloVe")

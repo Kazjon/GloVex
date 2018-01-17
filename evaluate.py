@@ -1,4 +1,4 @@
-import argparse, logging, scipy, itertools
+import argparse, logging, scipy, itertools, sys, multiprocessing
 
 import preprocessor
 
@@ -11,16 +11,23 @@ def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_
 	logger.info("  ** Evaluating dataset.")
 	dataset_surps = []
 	count = 0
-	for id,title,doc,raw_doc in zip(acm.doc_ids, acm.doc_titles, acm.documents, acm.doc_raws):
+	print 'acm.doc_ids', len(acm.doc_ids)
+	print 'acm.doc_titles', len(acm.doc_titles)
+	print 'acm.documents', len(acm.documents)
+	print 'acm.doc_raws', len(acm.doc_raws)
+	# for id,title,doc,raw_doc in zip(acm.doc_ids, acm.doc_titles, acm.documents, acm.doc_raws):
+	for id, doc, raw_doc in zip(acm.doc_ids, acm.documents, acm.doc_raws):
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
 			surps = estimate_document_surprise_pairs(doc, model, acm.cooccurrence, acm.word_occurrence, acm.dictionary, acm.documents, use_sglove=acm.use_sglove, ignore_order=ignore_order)
 			if top_n_per_doc and len(surps) > top_n_per_doc:
 				surps = surps[:top_n_per_doc]
-			dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
+			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
+			dataset_surps.append({"id": id,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
 		else:
-			dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
+			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
+			dataset_surps.append({"id": id,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
 		count+=1
 	logger.info("  ** Evaluation complete.")
 	return dataset_surps
@@ -133,29 +140,79 @@ def most_similar_differences(surp, surp_list, model, dictionary, n = 10):
 	return results
 
 if __name__ == "__main__":
+	# Parse arguments from the command
 	parser = argparse.ArgumentParser(description="Evaluate a dataset using a trained GloVex model.")
 	parser.add_argument("inputfile", help='The input file path to work with (omit the args and suffix)')
+	parser.add_argument("--dataset", default="acm",type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
+	parser.add_argument("--name", default=None, type=str, help= "Name of this run (used when saving files.)")
+	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
+	parser.add_argument("--epochs", default = 25, type=int, help="The number of epochs to train GloVe for.")
+	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
+	parser.add_argument("--learning_rate_decay", default=25.0, type=float, help="LR is halved after this many epochs, divided by three after twice this, by four after three times this, etc.")
+	parser.add_argument("--print_surprise_every", default=25, type=int, help="Evaluate the whole dataset and print the most surprising every this number of epochs (time consuming).")
+	parser.add_argument("--glove_x_max", default = 100.0, type=float, help="x_max parameter in GloVe.")
+	parser.add_argument("--glove_alpha", default = 0.75, type=float, help="alpha parameter in GloVe.")
 	parser.add_argument("--no_below", default = 0.001, type=float,
 						help="Min fraction of documents a word must appear in to be included.")
 	parser.add_argument("--no_above", default = 0.75, type=float,
 						help="Max fraction of documents a word can appear in to be included.")
+	parser.add_argument("--overwrite_model", action="store_true",
+						help="Ignore (and overwrite) existing .glovex file.")
+	parser.add_argument("--overwrite_preprocessing", action="store_true",
+						help="Ignore (and overwrite) existing .preprocessed file.")
+	parser.add_argument("--use_sglove", action="store_true",
+						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
+	parser.add_argument("--use_famcats", action="store_true",
+						help="Whether to train a personalised surprise model using familiarity categories.")
 	args = parser.parse_args()
-	acm = preprocessor.ACMDL_DocReader(args.inputfile)
-	acm.preprocess(no_below=args.no_below, no_above=args.no_above)
-	model = preprocessor.glovex_model(args.inputfile, acm.argstring, acm.cooccurrence)
+
+	# Read the documents according to its type
+	if args.dataset == "acm":
+		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_column="category" if args.use_famcats else None, run_name=args.name, use_sglove=args.use_sglove)
+	elif args.dataset == "plots":
+		reader = preprocessor.WikiPlot_DocReader(args.inputfile)
+	elif args.dataset == "recipes":
+		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_column="cuisine" if args.use_famcats else None)
+	else:
+		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
+		sys.exit()
+
+	# Preprocess the data
+	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+
+	# Construct the glovex_model
+	model = preprocessor.glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha,
+						 args.glove_x_max,
+						 args.overwrite_model, use_sglove=args.use_sglove,
+						 p_values=reader.cooccurrence_p_values if args.use_sglove else None)
+
+	# # Train the GloVe model and
+	# init_step_size = args.learning_rate
+	# step_size_decay = 25.0
+	# cores = multiprocessing.cpu_count() / 2
+	# logger.info(" ** Training GloVe")
+	# for epoch in range(args.epochs):
+	# 	err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
+	# 	logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
+	# 	if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
+	# 		top_n = 50
+	# 		preprocessor.print_top_n_surps(model, reader, top_n)
+	# 		preprocessor.save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+
+	# Evaluate it
 	logger.info(" ** Loaded GloVe")
-	dataset_surps = eval_dataset_surprise(model, acm, top_n_per_doc=25)
+	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)
 	dataset_surps.sort(key = lambda x: x["surprise"])
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
+	print 'dataset_surps', len(dataset_surps)
 	for doc in dataset_surps[:10]:
-		print doc["id"]+":", doc["title"]
+		# print doc["id"]+":", doc["title"]
+		print doc["id"]+":"
 		print "  ** 95th percentile surprise:",doc["surprise"]
 		print "  ** Abstract:",doc["raw"]
 		print "  ** Surprising pairs:",doc["surprises"]
-		most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, acm.dictionary)
+		most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, reader.dictionary)
 		print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
 		for pair in most_similar:
 			print "    ** ",pair[4],":",pair[1]
 		print
-
-

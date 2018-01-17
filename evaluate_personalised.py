@@ -171,33 +171,67 @@ def most_similar_differences(surp, surp_list, model, dictionary, n = 10):
 	return results
 
 if __name__ == "__main__":
+	# Parse arguments from the command
 	parser = argparse.ArgumentParser(description="Evaluate a dataset using a trained GloVex model.")
 	parser.add_argument("inputfile", help='The input file path to work with (omit the args and suffix)')
+	parser.add_argument("--dataset", default="acm", type=str,
+						help="Which dataset to assume.  Currently 'acm' or 'plots'")
+	parser.add_argument("--name", default=None, type=str, help="Name of this run (used when saving files.)")
+	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
+	parser.add_argument("--epochs", default = 25, type=int, help="The number of epochs to train GloVe for.")
+	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
+	parser.add_argument("--learning_rate_decay", default=25.0, type=float, help="LR is halved after this many epochs, divided by three after twice this, by four after three times this, etc.")
+	parser.add_argument("--print_surprise_every", default=25, type=int, help="Evaluate the whole dataset and print the most surprising every this number of epochs (time consuming).")
+	parser.add_argument("--glove_x_max", default = 100.0, type=float, help="x_max parameter in GloVe.")
+	parser.add_argument("--glove_alpha", default = 0.75, type=float, help="alpha parameter in GloVe.")
 	parser.add_argument("--no_below", default = 0.001, type=float,
 						help="Min fraction of documents a word must appear in to be included.")
 	parser.add_argument("--no_above", default = 0.75, type=float,
 						help="Max fraction of documents a word can appear in to be included.")
+	parser.add_argument("--overwrite_model", action="store_true",
+						help="Ignore (and overwrite) existing .glovex file.")
+	parser.add_argument("--overwrite_preprocessing", action="store_true",
+						help="Ignore (and overwrite) existing .preprocessed file.")
+	parser.add_argument("--use_sglove", action="store_true",
+						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
+	parser.add_argument("--use_famcats", action="store_true",
+						help="Whether to train a personalised surprise model using familiarity categories.")
 	args = parser.parse_args()
-	acm = preprocessor.ACMDL_DocReader(args.inputfile,"title", "abstract", "ID")
-	acm.preprocess(no_below=args.no_below, no_above=args.no_above)
-	models = preprocessor.load_personalised_models(args.inputfile, acm)
+
+	# Read the documents according to its type
+	if args.dataset == "acm":
+		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_column="category" if args.use_famcats else None, run_name=args.name, use_sglove=args.use_sglove)
+	elif args.dataset == "plots":
+		reader = preprocessor.WikiPlot_DocReader(args.inputfile)
+	elif args.dataset == "recipes":
+		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_column="cuisine" if args.use_famcats else None)
+	else:
+		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
+		sys.exit()
+
+	# Preprocess the data
+	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+
+	# Load personalized models
+	models = preprocessor.load_personalised_models(args.inputfile, reader)
 	logger.info(" ** Loaded GloVe")
 
-	user = [random.random() for fc in acm.famcats]
-	logger.info(" ** Generated fake user familiarity profile: "+", ".join([str(fc)+": "+str(f) for f,fc in zip(user,acm.famcats)]))
+	# Get familiarity category of the data
+	user = [random.random() for fc in reader.famcats]
+	logger.info(" ** Generated fake user familiarity profile: "+", ".join([str(fc)+": "+str(f) for f,fc in zip(user,reader.famcats)]))
 
-	dataset_surps = eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25)
-	dataset_surps.sort(key = lambda x: x["surprise"])
-	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
-	for doc in dataset_surps[:10]:
-		print doc["id"]+":", doc["title"]
-		print "  ** 95th percentile surprise:",doc["surprise"]
-		print "  ** Abstract:",doc["raw"]
-		print "  ** Surprising pairs:",doc["surprises"]
-		most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, acm.dictionary)
-		print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
-		for pair in most_similar:
-			print "    ** ",pair[4],":",pair[1]
-		print
-
-
+	# # Evaluate personalized surprise model
+	# dataset_surps = eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25)
+	# dataset_surps.sort(key = lambda x: x["surprise"])
+	# unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
+	# for doc in dataset_surps[:10]:
+	# 	print doc["id"]+":", doc["title"]
+	# 	print "  ** 95th percentile surprise:",doc["surprise"]
+	# 	print "  ** Abstract:",doc["raw"]
+	# 	print "  ** Surprising pairs:",doc["surprises"]
+	# 	most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, acm.dictionary)
+	# 	print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
+	# 	for pair in most_similar:
+	# 		print "    ** ",pair[4],":",pair[1]
+	# 	print
+	#

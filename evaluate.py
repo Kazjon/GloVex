@@ -186,19 +186,6 @@ if __name__ == "__main__":
 						 args.overwrite_model, use_sglove=args.use_sglove,
 						 p_values=reader.cooccurrence_p_values if args.use_sglove else None)
 
-	# # Train the GloVe model and
-	# init_step_size = args.learning_rate
-	# step_size_decay = 25.0
-	# cores = multiprocessing.cpu_count() / 2
-	# logger.info(" ** Training GloVe")
-	# for epoch in range(args.epochs):
-	# 	err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
-	# 	logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
-	# 	if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
-	# 		top_n = 50
-	# 		preprocessor.print_top_n_surps(model, reader, top_n)
-	# 		preprocessor.save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
-
 	# Evaluate it
 	logger.info(" ** Loaded GloVe")
 	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)

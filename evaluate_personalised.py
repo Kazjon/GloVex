@@ -8,17 +8,22 @@ logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=lo
 logger = logging.getLogger("glovex")
 
 def eval_personalised_dataset_surprise(models, acm, user, log_every=1000, ignore_order=True):
+# def eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25, log_every=1000, ignore_order=True):
 	logger.info("  ** Evaluating dataset..")
 	dataset_surps = []
 	count = 0
-	for id,title,doc,raw_doc in zip(acm.doc_ids, acm.doc_titles, acm.documents, acm.doc_raws):
+	# for id,title,doc,raw_doc in zip(acm.doc_ids, acm.doc_titles, acm.documents, acm.doc_raws):
+	for id, doc, raw_doc in zip(acm.doc_ids, acm.documents, acm.doc_raws):
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
 			surps = estimate_personalised_document_surprise_pairs(doc, models, acm, user, ignore_order=ignore_order)
-			dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
+			print 'surps', surps
+			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
+			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
 		else:
-			dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
+			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
+			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":[], "surprise": float("inf")})
 		count+=1
 	logger.info("  ** Evaluation complete.")
 	return dataset_surps
@@ -170,8 +175,7 @@ if __name__ == "__main__":
 	# Parse arguments from the command
 	parser = argparse.ArgumentParser(description="Evaluate a dataset using a trained GloVex model.")
 	parser.add_argument("inputfile", help='The input file path to work with (omit the args and suffix)')
-	parser.add_argument("--dataset", default="acm", type=str,
-						help="Which dataset to assume.  Currently 'acm' or 'plots'")
+	parser.add_argument("--dataset", default="acm", type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
 	parser.add_argument("--name", default=None, type=str, help="Name of this run (used when saving files.)")
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
 	parser.add_argument("--epochs", default = 25, type=int, help="The number of epochs to train GloVe for.")
@@ -208,26 +212,41 @@ if __name__ == "__main__":
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
 
+	# print reader.famcats
+	# print 'doc_famcats', reader.doc_famcats
+	# print 'doc_raws', reader.doc_raws
+	# print 'cooccurrence', reader.cooccurrence.iteritems()
+
 	# Load personalized models
 	models = preprocessor.load_personalised_models(args.inputfile, reader)
 	logger.info(" ** Loaded GloVe")
 
 	# Get familiarity category of the data
-	user = [random.random() for fc in reader.famcats]
-	logger.info(" ** Generated fake user familiarity profile: "+", ".join([str(fc)+": "+str(f) for f,fc in zip(user,reader.famcats)]))
+	# The user's familiarity scores for each cuisine (score: between 0-1) [[0.3, 0.3, 0.5, ], [], [] ... ]
+	# Try with one user first
+	# [mexican, chinese, greek, indian, thai, italian]
+	# user = [random.random() for fc in reader.famcats]
+	user = [0.5, 0.6, 0.8, 0.6, 0.3, 0.7]
+	print 'user', user
+	logger.info(" ** Generated fake user familiarity profile: " + ", ".join([str(fc)+": "+str(f) for f,fc in zip(user, reader.famcats)]))
 
-	# # Evaluate personalized surprise model
+# # 	Repeat for each user
+# 	for each_user in users:
+	# Evaluate personalized surprise model
 	# dataset_surps = eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25)
-	# dataset_surps.sort(key = lambda x: x["surprise"])
-	# unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
-	# for doc in dataset_surps[:10]:
-	# 	print doc["id"]+":", doc["title"]
-	# 	print "  ** 95th percentile surprise:",doc["surprise"]
-	# 	print "  ** Abstract:",doc["raw"]
-	# 	print "  ** Surprising pairs:",doc["surprises"]
-	# 	most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, acm.dictionary)
-	# 	print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
-	# 	for pair in most_similar:
-	# 		print "    ** ",pair[4],":",pair[1]
-	# 	print
-	#
+	# dataset_surps = eval_personalised_dataset_surprise(models, reader, user, top_n_per_doc=25)
+	dataset_surps = eval_personalised_dataset_surprise(models, reader, user)
+	print 'dataset_surps', dataset_surps
+	dataset_surps.sort(key = lambda x: x["surprise"])
+	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
+	for doc in dataset_surps[:10]:
+		print doc["id"]+":", doc["title"]
+		print "  ** 95th percentile surprise:",doc["surprise"]
+		print "  ** Abstract:",doc["raw"]
+		print "  ** Surprising pairs:",doc["surprises"]
+		# most_similar = most_similar_differences(doc["surprises"][0],unique_surps, model, reader.dictionary)
+		most_similar = most_similar_differences(doc["surprises"][0],unique_surps, models, reader.dictionary)
+		print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
+		for pair in most_similar:
+			print "    ** ",pair[4],":",pair[1]
+		print

@@ -501,7 +501,6 @@ if __name__ == "__main__":
 	# If the familiarity categories (fam_cat) are known
 	else:
 		for fc,fc_cooccurrence in reader.cooccurrence.iteritems():
-			# Pass the familiarity category (fam_cat) file to the glovex_model function
 			model = glovex_model(args.inputfile, reader.argstring+"_fc"+fc, fc_cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 								 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values[fc] if args.use_sglove else None)
 

@@ -27,13 +27,13 @@ def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_
 
 def document_surprise(surps, percentile=95):
 	if len(surps):
-		return np.percentile([x[2] for x in surps], 100-percentile) #note that percentile calculates the highest.
+		return np.percentile([x[2] for x in surps], percentile) #note that percentile calculates the highest.
 	return float("inf")
 
 def estimate_document_surprise_pairs(doc, model, cooccurrence, word_occurrence, dictionary, documents, use_sglove=False, top_n_per_doc = 0, ignore_order=True):
 	est_cooc_mat = estimate_document_cooccurrence_matrix(doc, model, cooccurrence, use_sglove=use_sglove)
 	surps = document_cooccurrence_to_surprise(doc, est_cooc_mat, word_occurrence, dictionary, len(documents), ignore_order=ignore_order)
-	surps.sort(key = lambda x: x[2])
+	surps.sort(key = lambda x: x[2], reverse=True)
 	if top_n_per_doc and len(surps) > top_n_per_doc:
 		return surps[:top_n_per_doc]
 	return surps
@@ -43,7 +43,7 @@ def word_pair_surprise(w1_w2_cooccurrence, w1_occurrence, w2_occurrence, n_docs,
 	w1_w2_cooccurrence = min(min(w1_occurrence,w2_occurrence),max(0,w1_w2_cooccurrence)) #Capped due to estimates being off sometimes
 	p_w1_given_w2 = (w1_w2_cooccurrence + offset) / (w2_occurrence + offset)
 	p_w1 = (w1_occurrence + offset) / (n_docs + offset)
-	return p_w1_given_w2 / p_w1
+	return -np.log2(p_w1_given_w2 / p_w1)
 
 def extract_document_cooccurrence_matrix(doc, coocurrence):
 	cooc_mat = np.zeros([len(doc),len(doc)])
@@ -90,7 +90,7 @@ def document_cooccurrence_to_surprise(doc, cooc_mat, word_occurrence, dictionary
 		if not w1 == w2:
 			s = word_pair_surprise(cooc_mat[i1,i2], word_occurrence[dictionary[w1]], word_occurrence[dictionary[w2]], n_docs)
 			surp_list.append((dictionary[w1], dictionary[w2],s))
-	surp_list.sort(key = lambda x: x[2], reverse=False)
+	surp_list.sort(key = lambda x: x[2], reverse=True)
 	return surp_list
 
 #Return the surprises from the given list that have the most similar feature word (i.e. w1) to the one in the given surp.
@@ -145,7 +145,7 @@ if __name__ == "__main__":
 	model = preprocessor.glovex_model(args.inputfile, acm.argstring, acm.cooccurrence)
 	logger.info(" ** Loaded GloVe")
 	dataset_surps = eval_dataset_surprise(model, acm, top_n_per_doc=25)
-	dataset_surps.sort(key = lambda x: x["surprise"])
+	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
 	for doc in dataset_surps[:10]:
 		print doc["id"]+":", doc["title"]

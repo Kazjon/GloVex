@@ -25,7 +25,7 @@ def eval_personalised_dataset_surprise(models, acm, user, log_every=1000, ignore
 
 def document_surprise(surps, percentile=95):
 	if len(surps):
-		return np.percentile([x[2] for x in surps], 100-percentile) #note that percentile calculates the highest.
+		return np.percentile([x[2] for x in surps], percentile) #note that percentile calculates the highest.
 	return float("inf")
 
 #Investigate whether we need to rekey the document rather than the cooc
@@ -51,7 +51,7 @@ def estimate_personalised_document_surprise_pairs_one_fc(doc, model, fc, acm, to
 
 	#May also need to un-re-key on the way out
 	# This is what's in the non-pers version, in which the above call seems to return a list:
-	surps_list.sort(key = lambda x: x[2])
+	surps_list.sort(key = lambda x: x[2], reverse=True)
 	if top_n_per_doc and len(surps_list) > top_n_per_doc:
 		return surps_list[:top_n_per_doc]
 	return surps_list
@@ -75,7 +75,7 @@ def word_pair_surprise(w1_w2_cooccurrence, w1_occurrence, w2_occurrence, n_docs,
 	w1_w2_cooccurrence = min(min(w1_occurrence,w2_occurrence),max(0,w1_w2_cooccurrence)) #Capped due to estimates being off sometimes
 	p_w1_given_w2 = (w1_w2_cooccurrence + offset) / (w2_occurrence + offset)
 	p_w1 = (w1_occurrence + offset) / (n_docs + offset)
-	return p_w1_given_w2 / p_w1
+	return -np.log2(p_w1_given_w2 / p_w1)
 
 def extract_document_cooccurrence_matrix(doc, coocurrence):
 	cooc_mat = np.zeros([len(doc),len(doc)])
@@ -109,7 +109,7 @@ def top_n_surps_from_doc(doc, model, cooccurrence, word_occurrence, dictionary, 
 	if len(doc):
 		est_cooc_mat = estimate_document_cooccurrence_matrix(doc,model,cooccurrence)
 		surps = document_cooccurrence_to_surprise(doc, est_cooc_mat, word_occurrence, dictionary, n_docs)
-		surps.sort(key = lambda x: x[2], reverse=False)
+		surps.sort(key = lambda x: x[2], reverse=True)
 		return surps[:min(top_n,len(surps))]
 	else:
 		return []
@@ -187,7 +187,7 @@ if __name__ == "__main__":
 	logger.info(" ** Generated fake user familiarity profile: "+", ".join([str(fc)+": "+str(f) for f,fc in zip(user,acm.famcats)]))
 
 	dataset_surps = eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25)
-	dataset_surps.sort(key = lambda x: x["surprise"])
+	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
 	for doc in dataset_surps[:10]:
 		print doc["id"]+":", doc["title"]

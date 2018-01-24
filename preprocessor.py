@@ -332,7 +332,7 @@ class Recipe_Reader(DocReader):
 					self.doc_ids.append(row[self.id_column])
 					self.doc_raws.append(row[self.text_column])
 					if self.use_famcats:
-						self.doc_famcats.append(row[self.famcat_column])
+						self.doc_famcats.append(row[self.famcat_column] if type(row[self.famcat_column]) is list else [row[self.famcat_column]])
 				yield docwords
 		self.first_pass = False
 
@@ -380,7 +380,7 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 				# NOTE: This doesn't currently work because the difference in IDs between the per-FC coocurrences and the global ones.  Need to rework it to involve calls to all_keys_to_per_fc_keys
 				top_surps += evaluate_personalised.estimate_personalised_document_surprise_pairs_one_fc(doc, model, famcat, reader)[:10]
 			top_surps = list(set(top_surps))
-			top_surps.sort(key = lambda x: x[2], reverse=False)
+			top_surps.sort(key = lambda x: x[2], reverse=True)
 			top_surps = top_surps[:top_n]
 
 	print "top_n surprising combos"
@@ -469,10 +469,13 @@ if __name__ == "__main__":
 
 	# Read the documents according to its type
 	if args.dataset == "acm":
+		print "Training a GloVeX surprise model on ACM Digital Library data."
 		reader = ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_column="category" if args.use_famcats else None, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
+		print "Training a GloVeX surprise model on wikiplots data."
 		reader = WikiPlot_DocReader(args.inputfile)
 	elif args.dataset == "recipes":
+		print "Training a GloVeX surprise model on recipe data."
 		reader = Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_column="cuisine" if args.use_famcats else None)
 	else:
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")

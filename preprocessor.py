@@ -511,7 +511,7 @@ if __name__ == "__main__":
 			for epoch in range(args.epochs):
 				err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
 				logger.info("   **** Training GloVe for "+fc+": epoch %d, error %.5f" % (epoch, err))
-			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
-					top_n = 50
-					print_top_n_surps(model, reader, top_n, famcat=fc)
-					save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+				if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
+						top_n = 50
+						print_top_n_surps(model, reader, top_n, famcat=fc)
+						save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))

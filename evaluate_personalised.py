@@ -28,7 +28,6 @@ def document_surprise(surps, percentile=95):
 		return np.percentile([x[2] for x in surps], percentile) #note that percentile calculates the highest.
 	return float("inf")
 
-#Investigate whether we need to rekey the document rather than the cooc
 def estimate_personalised_document_surprise_pairs(doc, models, acm, user, top_n_per_doc = 0, ignore_order=True):
 	surps = {}
 	for model,fc in zip(models,acm.famcats):
@@ -43,10 +42,6 @@ def estimate_personalised_document_surprise_pairs_one_fc(doc, model, fc, acm, to
 	surps = {}
 	rekeyed_doc = [(acm.all_keys_to_per_fc_keys[fc][k],v) for k,v in doc if k in acm.all_keys_to_per_fc_keys[fc].keys()]
 	est_cooc_mat = estimate_document_cooccurrence_matrix(rekeyed_doc,model,acm.cooccurrence[fc])
-
-	#This is what's in the non-pers version, need to compare this to the below and see why the returns are in a different format
-	#surps = document_cooccurrence_to_surprise(doc, est_cooc_mat, word_occurrence, dictionary, len(documents), ignore_order=ignore_order)
-
 	surps_list = document_cooccurrence_to_surprise(surps, fc, rekeyed_doc, est_cooc_mat, acm.word_occurrence[fc], acm.dictionary, acm.per_fc_keys_to_all_keys[fc], acm.docs_per_fc[fc], ignore_order=ignore_order)
 
 	#May also need to un-re-key on the way out
@@ -88,11 +83,12 @@ def extract_document_cooccurrence_matrix(doc, coocurrence):
 def estimate_word_pair_cooccurrence(wk1, wk2, model, cooccurrence, offset = 0.5):
 	# take dot product of vectors
 	cooc = np.dot(model.W[wk1],model.ContextW[wk2]) + model.b[wk1] + model.ContextB[wk2]
-	# correct for the rare feature scaling described in https://nlp.stanford.edu/pubs/glove.pdf
 	try:
 		actual_cooc = cooccurrence[wk1][wk2]
 	except KeyError:
 		actual_cooc = offset
+
+	# correct for the rare feature scaling described in https://nlp.stanford.edu/pubs/glove.pdf
 	if actual_cooc < model.x_max:
 		cooc *= 1.0/pow(actual_cooc / model.x_max,model.alpha)
 	return cooc[0]

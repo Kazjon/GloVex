@@ -150,16 +150,17 @@ class DocReader(object):
 			self.word_occurrence = {}
 
 			for doc,doc_fcs in zip(self.documents,self.doc_famcats):
+				for fc in doc_fcs:
+					if fc not in self.cooccurrence.keys():
+						self.cooccurrence[fc] = {}
+						self.word_occurrence[fc] = {}
+						self.per_fc_keys_to_all_keys[fc] = {}
+						self.all_keys_to_per_fc_keys[fc] = {}
+						self.docs_per_fc[fc] = 0
+					self.docs_per_fc[fc] += 1
 				for wk,wc in doc:
 					self.total_words += wc
 					for fc in doc_fcs:
-						if fc not in self.cooccurrence.keys():
-							self.cooccurrence[fc] = {}
-							self.word_occurrence[fc] = {}
-							self.per_fc_keys_to_all_keys[fc] = {}
-							self.all_keys_to_per_fc_keys[fc] = {}
-							self.docs_per_fc[fc] = 0
-						self.docs_per_fc[fc] += 1
 						try:
 							self.word_occurrence[fc][self.dictionary[wk]] += 1.0
 						except KeyError:

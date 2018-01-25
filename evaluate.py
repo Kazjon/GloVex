@@ -38,7 +38,7 @@ def estimate_document_surprise_pairs(doc, model, cooccurrence, word_occurrence, 
 		return surps[:top_n_per_doc]
 	return surps
 
-def word_pair_surprise(w1_w2_cooccurrence, w1_occurrence, w2_occurrence, n_docs, offset = 1):
+def word_pair_surprise(w1_w2_cooccurrence, w1_occurrence, w2_occurrence, n_docs, offset = 0.5):
 	# Offset is Laplacian smoothing
 	w1_w2_cooccurrence = min(min(w1_occurrence,w2_occurrence),max(0,w1_w2_cooccurrence)) #Capped due to estimates being off sometimes
 	p_w1_given_w2 = (w1_w2_cooccurrence + offset) / (w2_occurrence + offset)
@@ -58,7 +58,7 @@ def estimate_word_pair_cooccurrence(wk1, wk2, model, cooccurrence, use_sglove = 
 	cooc = np.dot(model.W[wk1],model.ContextW[wk2]) + model.b[wk1] + model.ContextB[wk2]
 	if use_sglove:
 		# correct for the significantly-less-than-unconditional-likelihood scaling in s_glove
-		cooc = cooc
+		cooc = cooc #Not currently scaling these in any way
 	elif cooccurrence[wk1][wk2] < model.x_max:
 		# correct for the rare feature scaling described in https://nlp.stanford.edu/pubs/glove.pdf
 		cooc *= 1.0/pow(cooccurrence[wk1][wk2] / model.x_max,model.alpha)

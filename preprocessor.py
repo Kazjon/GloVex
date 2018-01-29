@@ -372,13 +372,13 @@ def load_personalised_models(filepath, docreader):
 # Print top n surprise scores function
 def print_top_n_surps(model, reader, top_n, famcat=None):
 	top_surps = []
-	for doc in reader.documents:
+	for doc,fcs in zip(reader.documents, reader.doc_famcats):
 		if len(doc):
 			if famcat is None:
 				top_surps += evaluate.estimate_document_surprise_pairs(doc, model, reader.cooccurrence,
 																	   reader.word_occurrence, reader.dictionary,
 																	   reader.documents, use_sglove=reader.use_sglove)[:10]
-			else:
+			elif famcat in fcs:
 				# NOTE: This doesn't currently work because the difference in IDs between the per-FC coocurrences and the global ones.  Need to rework it to involve calls to all_keys_to_per_fc_keys
 				top_surps += evaluate_personalised.estimate_personalised_document_surprise_pairs_one_fc(doc, model, famcat, reader)[:10]
 			top_surps = list(set(top_surps))
@@ -425,6 +425,7 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 				w1_w2_cooccurrence = reader.cooccurrence[famcat][fc_wk1][fc_wk2]
 			except KeyError:
 				w1_w2_cooccurrence = 0
+
 			obs_coocs.append(w1_w2_cooccurrence)
 			obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, len(reader.documents))
 			obs_surps.append(obs_surp)

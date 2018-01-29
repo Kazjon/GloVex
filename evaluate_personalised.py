@@ -183,7 +183,7 @@ if __name__ == "__main__":
 	parser.add_argument("--learning_rate_decay", default=25.0, type=float, help="LR is halved after this many epochs, divided by three after twice this, by four after three times this, etc.")
 	parser.add_argument("--print_surprise_every", default=25, type=int, help="Evaluate the whole dataset and print the most surprising every this number of epochs (time consuming).")
 	parser.add_argument("--glove_x_max", default = 100.0, type=float, help="x_max parameter in GloVe.")
-	parser.add_argument("--glove_alpha", default = 0.75, type=float, help="alpha parameter in GloVe.")
+	parser.add_argument("--glove_alpha", default = 0.5, type=float, help="alpha parameter in GloVe.")
 	parser.add_argument("--no_below", default = 0.001, type=float,
 						help="Min fraction of documents a word must appear in to be included.")
 	parser.add_argument("--no_above", default = 0.75, type=float,

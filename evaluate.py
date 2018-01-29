@@ -154,7 +154,7 @@ if __name__ == "__main__":
 	parser.add_argument("--glove_alpha", default = 0.75, type=float, help="alpha parameter in GloVe.")
 	parser.add_argument("--no_below", default = 0.001, type=float,
 						help="Min fraction of documents a word must appear in to be included.")
-	parser.add_argument("--no_above", default = 0.75, type=float,
+	parser.add_argument("--no_above", default = 0.5, type=float,
 						help="Max fraction of documents a word can appear in to be included.")
 	parser.add_argument("--overwrite_model", action="store_true",
 						help="Ignore (and overwrite) existing .glovex file.")

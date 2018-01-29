@@ -35,7 +35,7 @@ def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_
 def document_surprise(surps, percentile=95):
 	if len(surps):
 		return np.percentile([x[2] for x in surps], percentile) #note that percentile calculates the highest.
-	return float("inf")
+	return float("-inf")
 
 def estimate_document_surprise_pairs(doc, model, cooccurrence, word_occurrence, dictionary, documents, use_sglove=False, top_n_per_doc = 0, ignore_order=True):
 	est_cooc_mat = estimate_document_cooccurrence_matrix(doc, model, cooccurrence, use_sglove=use_sglove)

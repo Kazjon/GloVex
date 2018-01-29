@@ -372,18 +372,23 @@ def load_personalised_models(filepath, docreader):
 # Print top n surprise scores function
 def print_top_n_surps(model, reader, top_n, famcat=None):
 	top_surps = []
-	for doc,fcs in zip(reader.documents, reader.doc_famcats):
-		if len(doc):
-			if famcat is None:
+	if famcat is None:
+		for doc in reader.documents:
+			if len(doc):
 				top_surps += evaluate.estimate_document_surprise_pairs(doc, model, reader.cooccurrence,
-																	   reader.word_occurrence, reader.dictionary,
-																	   reader.documents, use_sglove=reader.use_sglove)[:10]
-			elif famcat in fcs:
-				# NOTE: This doesn't currently work because the difference in IDs between the per-FC coocurrences and the global ones.  Need to rework it to involve calls to all_keys_to_per_fc_keys
+																		   reader.word_occurrence, reader.dictionary,
+																		   reader.documents,
+																		   use_sglove=reader.use_sglove)[:10]
+				top_surps = list(set(top_surps))
+				top_surps.sort(key=lambda x: x[2], reverse=True)
+				top_surps = top_surps[:top_n]
+	else:
+		for doc,fcs in zip(reader.documents, reader.doc_famcats):
+			if len(doc) and famcat in fcs:
 				top_surps += evaluate_personalised.estimate_personalised_document_surprise_pairs_one_fc(doc, model, famcat, reader)[:10]
-			top_surps = list(set(top_surps))
-			top_surps.sort(key = lambda x: x[2], reverse=True)
-			top_surps = top_surps[:top_n]
+				top_surps = list(set(top_surps))
+				top_surps.sort(key = lambda x: x[2], reverse=True)
+				top_surps = top_surps[:top_n]
 
 	print "top_n surprising combos"
 	w1s = []
@@ -427,7 +432,7 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 				w1_w2_cooccurrence = 0
 
 			obs_coocs.append(w1_w2_cooccurrence)
-			obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, len(reader.documents))
+			obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, reader.docs_per_fc[famcat])
 			obs_surps.append(obs_surp)
 
 	tab = PrettyTable()

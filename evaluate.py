@@ -27,7 +27,7 @@ def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_
 			dataset_surps.append({"id": id,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
 		else:
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
-			dataset_surps.append({"id": id,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
+			dataset_surps.append({"id": id,"raw":raw_doc, "surprises":[], "surprise": float("-inf")})
 		count+=1
 	logger.info("  ** Evaluation complete.")
 	return dataset_surps
@@ -188,7 +188,7 @@ if __name__ == "__main__":
 
 	# Evaluate it
 	logger.info(" ** Loaded GloVe")
-	dataset_surps = eval_dataset_surprise(model, acm, top_n_per_doc=25)
+	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)
 	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
 	print 'dataset_surps', len(dataset_surps)

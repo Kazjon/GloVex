@@ -369,6 +369,28 @@ def load_personalised_models(filepath, docreader):
 		models.append(glovex_model(filepath, docreader.argstring+"_fc"+str(fc), docreader.cooccurrence[fc]))
 	return models
 
+
+def train_glovex(model, reader, args, cores=1, batch_size=100, step_size_decay=25, famcat=None):
+	# Train the GloVe model
+	if famcat == None:
+		logger.info(" ** Training GloVe")
+		for epoch in range(args.epochs):
+			err = model.train(workers=cores, batch_size=100, step_size=args.learning_rate/(1.0+epoch/args.learning_rate_decay))
+			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
+			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
+				top_n = 50
+				print_top_n_surps(model, reader, top_n)
+				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+	else:
+		logger.info(" ** Training GloVe for " + fc)
+		for epoch in range(args.epochs):
+			err = model.train(workers=cores, batch_size=100, step_size=args.learning_rate/(1.0+epoch/args.learning_rate_decay))
+			logger.info("   **** Training GloVe for " + fc + ": epoch %d, error %.5f" % (epoch, err))
+			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
+				top_n = 50
+				print_top_n_surps(model, reader, top_n, famcat=fc)
+				save_model(model, args.inputfile, reader.argstring + "_epochs" + str(epoch))
+
 # Print top n surprise scores function
 def print_top_n_surps(model, reader, top_n, famcat=None):
 	top_surps = []
@@ -492,40 +514,18 @@ if __name__ == "__main__":
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
 
-	# print 'doc_famcats', reader.doc_famcats
-	# print 'doc_raws', reader.doc_raws
-	# print 'cooccurrence', reader.cooccurrence.iteritems()
-
-	init_step_size = args.learning_rate
-	step_size_decay = 25.0
-	cores = multiprocessing.cpu_count() / 2
-
-	# If the familiarity categories (fam_cat) are unknown
+	# If we're not using familiarity categories
 	if not args.use_famcats:
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 							 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values if args.use_sglove else None)
-		logger.info(" ** Training GloVe")
-		for epoch in range(args.epochs):
-			err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
-			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
-			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
-				top_n = 50
-				print_top_n_surps(model, reader, top_n)
-				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+		train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1)
 
-	# If the familiarity categories (fam_cat) are known and will be imported from a file
+
+	# If the familiarity categories will be imported
 	else:
 		for fc, fc_cooccurrence in reader.cooccurrence.iteritems():
 			# Build the GloVex model using the familiarity categories provided
 			model = glovex_model(args.inputfile, reader.argstring + "_fc" + fc, fc_cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 								 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values[fc] if args.use_sglove else None)
 
-			# Train the GloVe model
-			logger.info(" ** Training GloVe for " + fc)
-			for epoch in range(args.epochs):
-				err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
-				logger.info("   **** Training GloVe for "+fc+": epoch %d, error %.5f" % (epoch, err))
-				if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
-						top_n = 50
-						print_top_n_surps(model, reader, top_n, famcat=fc)
-						save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+			train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, famcat = fc)

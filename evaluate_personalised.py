@@ -194,17 +194,15 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .preprocessed file.")
 	parser.add_argument("--use_sglove", action="store_true",
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
-	parser.add_argument("--use_famcats", action="store_true",
-						help="Whether to train a personalised surprise model using familiarity categories.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
 	if args.dataset == "acm":
-		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_column="category" if args.use_famcats else None, run_name=args.name, use_sglove=args.use_sglove)
+		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_column="category", run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
 		reader = preprocessor.WikiPlot_DocReader(args.inputfile)
 	elif args.dataset == "recipes":
-		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_column="cuisine" if args.use_famcats else None)
+		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_column="cuisine")
 	else:
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
@@ -219,6 +217,14 @@ if __name__ == "__main__":
 
 	# Load personalized models
 	models = preprocessor.load_personalised_models(args.inputfile, reader)
+
+	for model,fc in zip(models,reader.famcats):
+		if np.sum(model.gradsqb)/len(model.gradsqb) == 1: # Nothing in the model object says how many epochs it's been trained for.  However, if the bias nodes are all 1, it's untrained
+			logger.info(" ** Training created "+fc+" model.")
+			preprocessor.train_glovex(model, reader, args, famcat=fc)
+		else:
+			logger.info(" ** Loaded GloVe model for "+fc+".")
+
 	logger.info(" ** Loaded GloVe")
 
 	# Get familiarity category of the data

@@ -162,17 +162,15 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .preprocessed file.")
 	parser.add_argument("--use_sglove", action="store_true",
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
-	parser.add_argument("--use_famcats", action="store_true",
-						help="Whether to train a personalised surprise model using familiarity categories.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
 	if args.dataset == "acm":
-		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_column="category" if args.use_famcats else None, run_name=args.name, use_sglove=args.use_sglove)
+		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID",None, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
 		reader = preprocessor.WikiPlot_DocReader(args.inputfile)
 	elif args.dataset == "recipes":
-		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_column="cuisine" if args.use_famcats else None)
+		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID",None)
 	else:
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
@@ -186,8 +184,13 @@ if __name__ == "__main__":
 						 args.overwrite_model, use_sglove=args.use_sglove,
 						 p_values=reader.cooccurrence_p_values if args.use_sglove else None)
 
+	if np.sum(model.gradsqb)/len(model.gradsqb) == 1: # Nothing in the model object says how many epochs it's been trained for.  However, if the bias nodes are all 1, it's untrained
+		logger.info(" ** Training created model.")
+		preprocessor.train_glovex(model, reader, args)
+	else:
+		logger.info(" ** Loaded GloVe model.")
+
 	# Evaluate it
-	logger.info(" ** Loaded GloVe")
 	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)
 	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))

@@ -2,22 +2,24 @@ import argparse, logging, scipy, itertools, random, sys
 
 import preprocessor
 
+from evaluate import word_pair_surprise
+
 import numpy as np
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
 
-def eval_personalised_dataset_surprise(models, acm, user, log_every=1000, ignore_order=True):
+def eval_personalised_dataset_surprise(models, reader, user, log_every=1000, ignore_order=True):
 # def eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25, log_every=1000, ignore_order=True):
 	logger.info("  ** Evaluating dataset..")
 	dataset_surps = []
 	count = 0
 	# for id,title,doc,raw_doc in zip(acm.doc_ids, acm.doc_titles, acm.documents, acm.doc_raws):
-	for id, doc, raw_doc in zip(acm.doc_ids, acm.documents, acm.doc_raws):
+	for id, doc, raw_doc in zip(reader.doc_ids, reader.documents, reader.doc_raws):
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
-			surps = estimate_personalised_document_surprise_pairs(doc, models, acm, user, ignore_order=ignore_order)
+			surps = estimate_personalised_document_surprise_pairs(doc, models, reader, user, ignore_order=ignore_order)
 			print 'surps', surps
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
 			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
@@ -33,21 +35,21 @@ def document_surprise(surps, percentile=95):
 		return np.percentile([x[2] for x in surps], percentile) #note that percentile calculates the highest.
 	return float("inf")
 
-def estimate_personalised_document_surprise_pairs(doc, models, acm, user, top_n_per_doc = 0, ignore_order=True):
+def estimate_personalised_document_surprise_pairs(doc, models, reader, user, top_n_per_doc = 0, ignore_order=True):
 	surps = {}
-	for model,fc in zip(models,acm.famcats):
+	for model,fc in zip(models,reader.famcats):
 		#rekeyed_cooccurrence = {acm.per_fc_keys_to_all_keys[fc][k]:{acm.per_fc_keys_to_all_keys[fc][k2]:v2 for k2,v2 in v.iteritems()} for k,v in acm.cooccurrence[fc].iteritems()}
-		rekeyed_doc = [(acm.all_keys_to_per_fc_keys[fc][k],v) for k,v in doc if k in acm.all_keys_to_per_fc_keys[fc].keys()]
-		est_cooc_mat = estimate_document_cooccurrence_matrix(rekeyed_doc,model,acm.cooccurrence[fc])
-		document_cooccurrence_to_surprise(surps, fc, rekeyed_doc, est_cooc_mat, acm.word_occurrence[fc], acm.dictionary, acm.per_fc_keys_to_all_keys[fc], acm.docs_per_fc[fc], ignore_order=ignore_order)
-	combine_surprise(surps, {fc:f for fc,f in zip(acm.famcats,user)})
+		rekeyed_doc = [(reader.all_keys_to_per_fc_keys[fc][k],v) for k,v in doc if k in reader.all_keys_to_per_fc_keys[fc].keys()]
+		est_cooc_mat = estimate_document_cooccurrence_matrix(rekeyed_doc,model,reader.cooccurrence[fc])
+		document_cooccurrence_to_surprise(surps, fc, rekeyed_doc, est_cooc_mat, reader.word_occurrence[fc], reader.dictionary, reader.per_fc_keys_to_all_keys[fc], reader.docs_per_fc[fc], ignore_order=ignore_order)
+	combine_surprise(surps, {fc:f for fc,f in zip(reader.famcats,user)})
 	return surps
 
-def estimate_personalised_document_surprise_pairs_one_fc(doc, model, fc, acm, top_n_per_doc = 0, ignore_order=True):
+def estimate_personalised_document_surprise_pairs_one_fc(doc, model, fc, reader, top_n_per_doc = 0, ignore_order=True):
 	surps = {}
-	rekeyed_doc = [(acm.all_keys_to_per_fc_keys[fc][k],v) for k,v in doc if k in acm.all_keys_to_per_fc_keys[fc].keys()]
-	est_cooc_mat = estimate_document_cooccurrence_matrix(rekeyed_doc,model,acm.cooccurrence[fc])
-	surps_list = document_cooccurrence_to_surprise(surps, fc, rekeyed_doc, est_cooc_mat, acm.word_occurrence[fc], acm.dictionary, acm.per_fc_keys_to_all_keys[fc], acm.docs_per_fc[fc], ignore_order=ignore_order)
+	rekeyed_doc = [(reader.all_keys_to_per_fc_keys[fc][k],v) for k,v in doc if k in reader.all_keys_to_per_fc_keys[fc].keys()]
+	est_cooc_mat = estimate_document_cooccurrence_matrix(rekeyed_doc,model,reader.cooccurrence[fc])
+	surps_list = document_cooccurrence_to_surprise(surps, fc, rekeyed_doc, est_cooc_mat, reader.word_occurrence[fc], reader.dictionary, reader.per_fc_keys_to_all_keys[fc], reader.docs_per_fc[fc], ignore_order=ignore_order)
 
 	#May also need to un-re-key on the way out
 	# This is what's in the non-pers version, in which the above call seems to return a list:
@@ -69,13 +71,6 @@ def combine_surprise_across_famcats_for_user(surprises,user, method="weighted_su
 	else:
 		raise NotImplementedError
 
-
-def word_pair_surprise(w1_w2_cooccurrence, w1_occurrence, w2_occurrence, n_docs, offset = 0.5):
-	# Offset is Laplacian smoothing
-	w1_w2_cooccurrence = min(min(w1_occurrence,w2_occurrence),max(0,w1_w2_cooccurrence)) #Capped due to estimates being off sometimes
-	p_w1_given_w2 = (w1_w2_cooccurrence + offset) / (w2_occurrence + offset)
-	p_w1 = (w1_occurrence + offset) / (n_docs + offset)
-	return -np.log2(p_w1_given_w2 / p_w1)
 
 def extract_document_cooccurrence_matrix(doc, coocurrence):
 	cooc_mat = np.zeros([len(doc),len(doc)])

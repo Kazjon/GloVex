@@ -7,20 +7,16 @@ import numpy as np
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
 
-def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_order=True):
+def eval_dataset_surprise(model, reader, top_n_per_doc = 0, log_every=1000, ignore_order=True):
 	logger.info("  ** Evaluating dataset.")
 	dataset_surps = []
 	count = 0
-	print 'acm.doc_ids', len(acm.doc_ids)
-	print 'acm.doc_titles', len(acm.doc_titles)
-	print 'acm.documents', len(acm.documents)
-	print 'acm.doc_raws', len(acm.doc_raws)
-	# for id,title,doc,raw_doc in zip(acm.doc_ids, acm.doc_titles, acm.documents, acm.doc_raws):
-	for id, doc, raw_doc in zip(acm.doc_ids, acm.documents, acm.doc_raws):
+	# for id,title,doc,raw_doc in zip(reader.doc_ids, reader.doc_titles, reader.documents, reader.doc_raws):
+	for id, doc, raw_doc in zip(reader.doc_ids, reader.documents, reader.doc_raws):
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
-			surps = estimate_document_surprise_pairs(doc, model, acm.cooccurrence, acm.word_occurrence, acm.dictionary, acm.documents, use_sglove=acm.use_sglove, ignore_order=ignore_order)
+			surps = estimate_document_surprise_pairs(doc, model, reader.cooccurrence, reader.word_occurrence, reader.dictionary, reader.documents, use_sglove=reader.use_sglove, ignore_order=ignore_order)
 			if top_n_per_doc and len(surps) > top_n_per_doc:
 				surps = surps[:top_n_per_doc]
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})

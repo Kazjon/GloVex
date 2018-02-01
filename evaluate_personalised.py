@@ -1,8 +1,4 @@
-import argparse, logging, scipy, itertools, random, sys
-
-import preprocessor
-
-import numpy as np
+import argparse, logging, scipy, itertools, random, sys, preprocessor, numpy as np, pandas as pd
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
@@ -171,10 +167,46 @@ def most_similar_differences(surp, surp_list, model, dictionary, n = 10):
 		return results[:n]
 	return results
 
+def survey_reader(qchef_surveydata_fn):
+	# Add .csv to the file path
+	qchef_surveydata_fn = qchef_surveydata_fn + '.csv'
+	# Read the CSV file
+	qchef_surveydata_df = pd.read_csv(qchef_surveydata_fn)
+	# Lower case the comments_1 column
+	qchef_surveydata_df['comments_1'] = qchef_surveydata_df['comments_1'].str.lower()
+	# Select the first timers dem_1 == 1
+	first_timer_df = qchef_surveydata_df[qchef_surveydata_df['dem_1'] == 1]
+	# Set up the condition for filtering out the second timers: if the keywords in the comments contains 'kaz' or 'test'
+	condition1 = first_timer_df['comments_1'].str.contains('test') == False
+	condition2 = first_timer_df['comments_1'].str.contains('test').isnull()
+	condition3 = first_timer_df['comments_1'].str.contains('kaz') == False
+	condition4 = first_timer_df['comments_1'].str.contains('kaz').isnull()
+	# Filter out the users who mentioned in their comments that it's the second time
+	first_timer_df = first_timer_df[(condition1 | condition2) & (condition3 | condition4)]
+	# print first_timer_df['comments_1'].unique()
+	# How Much Do You Know About These Foods?
+	# hab_11_01: American, hab_11_02: Chinese, hab_11_03: Mexican, hab_11_04: Italian, hab_11_05: Japanese, hab_11_06: Greek, hab_11_07: French, hab_11_08: Thai, hab_11_09: Spanish, hab_11_10: Indian, hab_11_11: Mediterranean
+	fam_cols = ['hab_11_01', 'hab_11_02', 'hab_11_03', 'hab_11_04', 'hab_11_05', 'hab_11_06', 'hab_11_07', 'hab_11_08',
+				'hab_11_09', 'hab_11_10', 'hab_11_11']
+	# To-do: Modern is either American or the average of all of the cuisines
+	# Filter in the user familiarity columns only
+	user_fam_df = first_timer_df[fam_cols]
+	# Reorder cuisines as following to match the reader.famcat: mexican, chinese, greek, indian, thai, italian
+	cuisine_cols = ['hab_11_03', 'hab_11_02', 'hab_11_01', 'hab_11_06', 'hab_11_10', 'hab_11_08', 'hab_11_04']
+	user_fam_df = user_fam_df[cuisine_cols]
+	# Get list of lists of users' familiarity rarings
+	user_fam_score_arr = user_fam_df.values.tolist()
+	# Scale the ratings to range between 0-1
+	user_fam_scaled_arr = np.array(user_fam_score_arr) / 5.0
+	# Return as a list instead of a numpy array
+	return user_fam_scaled_arr.tolist()
+
 if __name__ == "__main__":
 	# Parse arguments from the command
 	parser = argparse.ArgumentParser(description="Evaluate a dataset using a trained GloVex model.")
 	parser.add_argument("inputfile", help='The input file path to work with (omit the args and suffix)')
+	parser.add_argument("--user_survey", default=None, type=str, help='The input file path to the user survey')
+	# Argument to chekc the function used for modern
 	parser.add_argument("--dataset", default="acm", type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
 	parser.add_argument("--name", default=None, type=str, help="Name of this run (used when saving files.)")
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
@@ -198,6 +230,7 @@ if __name__ == "__main__":
 						help="Whether to train a personalised surprise model using familiarity categories.")
 	args = parser.parse_args()
 
+	# """
 	# Read the documents according to its type
 	if args.dataset == "acm":
 		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_column="category" if args.use_famcats else None, run_name=args.name, use_sglove=args.use_sglove)
@@ -212,7 +245,7 @@ if __name__ == "__main__":
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
 
-	# print reader.famcats
+	# print 'reader.famcats', reader.famcats
 	# print 'doc_famcats', reader.doc_famcats
 	# print 'doc_raws', reader.doc_raws
 	# print 'cooccurrence', reader.cooccurrence.iteritems()
@@ -220,33 +253,41 @@ if __name__ == "__main__":
 	# Load personalized models
 	models = preprocessor.load_personalised_models(args.inputfile, reader)
 	logger.info(" ** Loaded GloVe")
+	# """
 
-	# Get familiarity category of the data
+	# Get familiarity category of the data from the user survey data
 	# The user's familiarity scores for each cuisine (score: between 0-1) [[0.3, 0.3, 0.5, ], [], [] ... ]
-	# Try with one user first
-	# [mexican, chinese, greek, indian, thai, italian]
-	# user = [random.random() for fc in reader.famcats]
-	user = [0.5, 0.6, 0.8, 0.6, 0.3, 0.7]
-	print 'user', user
-	logger.info(" ** Generated fake user familiarity profile: " + ", ".join([str(fc)+": "+str(f) for f,fc in zip(user, reader.famcats)]))
+	# Order of cuisines[mexican, chinese, greek, indian, thai, italian]
+	if args.user_survey != None:
+		users_fam = survey_reader(args.user_survey)
+	else:
+		print 'There is no user data, an assumed user will be modeled instead'
+		# user = [random.random() for fc in reader.famcats]
+		users_fam = [[0.5, 0.6, 0.8, 0.6, 0.3, 0.7]]
+		print 'users_fam', users_fam
+		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
+			[str(fc) + ": " + str(f) for f, fc in zip(users_fam, reader.famcats)]))
 
-# # 	Repeat for each user
-# 	for each_user in users:
+	"""
 	# Evaluate personalized surprise model
-	# dataset_surps = eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25)
-	# dataset_surps = eval_personalised_dataset_surprise(models, reader, user, top_n_per_doc=25)
-	dataset_surps = eval_personalised_dataset_surprise(models, reader, user)
-	print 'dataset_surps', dataset_surps
-	dataset_surps.sort(key = lambda x: x["surprise"])
-	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
-	for doc in dataset_surps[:10]:
-		print doc["id"]+":", doc["title"]
-		print "  ** 95th percentile surprise:",doc["surprise"]
-		print "  ** Abstract:",doc["raw"]
-		print "  ** Surprising pairs:",doc["surprises"]
-		# most_similar = most_similar_differences(doc["surprises"][0],unique_surps, model, reader.dictionary)
-		most_similar = most_similar_differences(doc["surprises"][0],unique_surps, models, reader.dictionary)
-		print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
-		for pair in most_similar:
-			print "    ** ",pair[4],":",pair[1]
-		print
+	# Repeat for each user
+	for each_user in users_fam:
+		print 'each_user', each_user
+		# dataset_surps = eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25)
+		# dataset_surps = eval_personalised_dataset_surprise(models, reader, user, top_n_per_doc=25)
+		dataset_surps = eval_personalised_dataset_surprise(models, reader, each_user)
+		print 'dataset_surps', dataset_surps
+		dataset_surps.sort(key = lambda x: x["surprise"])
+		unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
+		for doc in dataset_surps[:10]:
+			print doc["id"]+":", doc["title"]
+			print "  ** 95th percentile surprise:",doc["surprise"]
+			print "  ** Abstract:",doc["raw"]
+			print "  ** Surprising pairs:",doc["surprises"]
+			# most_similar = most_similar_differences(doc["surprises"][0],unique_surps, model, reader.dictionary)
+			most_similar = most_similar_differences(doc["surprises"][0],unique_surps, models, reader.dictionary)
+			print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
+			for pair in most_similar:
+				print "    ** ",pair[4],":",pair[1]
+			print
+	"""

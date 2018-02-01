@@ -1,8 +1,6 @@
 import argparse, logging, scipy, itertools, random, sys
 
-import preprocessor
-
-from evaluate import word_pair_surprise
+import preprocessor, evaluate
 
 import numpy as np
 
@@ -20,20 +18,27 @@ def eval_personalised_dataset_surprise(models, reader, user, log_every=1000, ign
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
 			surps = estimate_personalised_document_surprise_pairs(doc, models, reader, user, ignore_order=ignore_order)
-			print 'surps', surps
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
-			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
+			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":convert_personalised_to_combined_surprise(surps, reader.dictionary), "surprise": document_surprise(surps)})
 		else:
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
-			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":[], "surprise": float("inf")})
+			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":[], "surprise": float("-inf")})
 		count+=1
 	logger.info("  ** Evaluation complete.")
 	return dataset_surps
 
+def convert_personalised_to_combined_surprise(surps, dictionary):
+	surplist = []
+	for k1,v1 in surps.iteritems():
+		for k2,v2 in v1.iteritems():
+			surplist.append((dictionary.id2token[k1], dictionary.id2token[k2], dict(v2)["combined"]))
+	return surplist
+
 def document_surprise(surps, percentile=95):
 	if len(surps):
-		return np.percentile([x[2] for x in surps], percentile) #note that percentile calculates the highest.
-	return float("inf")
+		surp_ratings = [w1_w2 for w1 in surps.values() for w1_w2 in w1.values()]
+		return np.percentile([r[1] for l in surp_ratings for r in l if r[0] == "combined"], percentile) #note that percentile calculates the highest.
+	return float("-inf")
 
 def estimate_personalised_document_surprise_pairs(doc, models, reader, user, top_n_per_doc = 0, ignore_order=True):
 	surps = {}
@@ -117,7 +122,7 @@ def document_cooccurrence_to_surprise(surps, fc, doc, cooc_mat, word_occurrence,
 		w1 = doc[i1][0]
 		w2 = doc[i2][0]
 		if not w1 == w2 and w1 in key_map.keys() and w2 in key_map.keys(): #if the words aren't in this famcat's model, then don't make any predictions on them.
-			s = word_pair_surprise(cooc_mat[i1,i2], word_occurrence[dictionary[key_map[w1]]], word_occurrence[dictionary[key_map[w2]]], n_docs)
+			s = evaluate.word_pair_surprise(cooc_mat[i1,i2], word_occurrence[dictionary[key_map[w1]]], word_occurrence[dictionary[key_map[w2]]], n_docs)
 			if key_map[w1] not in surps.keys():
 				surps[key_map[w1]] = {key_map[w2]:[(fc,s)]}
 			elif key_map[w2] not in surps[key_map[w1]].keys():
@@ -154,13 +159,18 @@ def most_similar_contexts(surp, surp_list, model, dictionary, n = 10):
 	return results
 
 #Return the surprises from the given list that have the most similar vector difference to the one in the given surp.
-def most_similar_differences(surp, surp_list, model, dictionary, n = 10):
+def most_similar_differences_personal(surp, surp_list, models, dictionary, n = 10):
 	results = []
 	for surp2 in surp_list:
 		if not surp[:2] == surp2[:2]:
-			surp_diff = model.W[dictionary.token2id[surp[0]]] -  model.W[dictionary.token2id[surp[1]]]
-			surp2_diff = model.W[dictionary.token2id[surp2[0]]] -  model.W[dictionary.token2id[surp2[1]]]
-			results.append([surp,surp2,surp_diff,surp2_diff,scipy.spatial.distance.euclidean(surp_diff, surp2_diff)])
+			surp_diffs = []
+			surp2_diffs = []
+			dists = []
+			for model in models:
+				surp_diffs.append(model.W[dictionary.token2id[surp[0]]] -  model.W[dictionary.token2id[surp[1]]])
+				surp2_diffs.append(model.W[dictionary.token2id[surp2[0]]] -  model.W[dictionary.token2id[surp2[1]]])
+				dists.append(scipy.spatial.distance.euclidean(surp_diffs[-1], surp2_diffs[-1]))
+			results.append([surp,surp2,np.average(surp_diffs),np.average(surp2_diffs),np.average(dists)])
 	results.sort(key = lambda x: x[4])
 	if n and n < len(results):
 		return results[:n]
@@ -237,17 +247,18 @@ if __name__ == "__main__":
 	# dataset_surps = eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25)
 	# dataset_surps = eval_personalised_dataset_surprise(models, reader, user, top_n_per_doc=25)
 	dataset_surps = eval_personalised_dataset_surprise(models, reader, user)
-	print 'dataset_surps', dataset_surps
-	dataset_surps.sort(key = lambda x: x["surprise"])
+	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
 	for doc in dataset_surps[:10]:
-		print doc["id"]+":", doc["title"]
+		print doc["id"]+": (no titles currently)"#, doc["title"]
 		print "  ** 95th percentile surprise:",doc["surprise"]
-		print "  ** Abstract:",doc["raw"]
+		print "  ** Document text:",doc["raw"]
 		print "  ** Surprising pairs:",doc["surprises"]
-		# most_similar = most_similar_differences(doc["surprises"][0],unique_surps, model, reader.dictionary)
-		most_similar = most_similar_differences(doc["surprises"][0],unique_surps, models, reader.dictionary)
-		print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
-		for pair in most_similar:
-			print "    ** ",pair[4],":",pair[1]
+
+		#if len(doc["surprises"]):
+		#	# most_similar = most_similar_differences(doc["surprises"][0],unique_surps, model, reader.dictionary)
+		#	most_similar = most_similar_differences_personal(doc["surprises"][0],unique_surps, models, reader.dictionary)
+		#	print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
+		#	for pair in most_similar:
+		#		print "    ** ",pair[4],":",pair[1]
 		print

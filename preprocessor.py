@@ -369,6 +369,27 @@ def load_personalised_models(filepath, docreader):
 		models.append(glovex_model(filepath, docreader.argstring+"_fc"+str(fc), docreader.cooccurrence[fc]))
 	return models
 
+def train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, batch_size=1000, step_size_decay=25, famcat=None):
+	# Train the GloVe model
+	if famcat == None:
+		logger.info(" ** Training GloVe")
+		for epoch in range(args.epochs):
+			err = model.train(workers=cores, batch_size=batch_size, step_size=args.learning_rate/(1.0+epoch/args.learning_rate_decay))
+			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
+			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
+				top_n = 50
+				print_top_n_surps(model, reader, top_n)
+				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+	else:
+		logger.info(" ** Training GloVe for " + famcat)
+		for epoch in range(args.epochs):
+			err = model.train(workers=cores, batch_size=batch_size, step_size=args.learning_rate/(1.0+epoch/args.learning_rate_decay))
+			logger.info("   **** Training GloVe for " + famcat + ": epoch %d, error %.5f" % (epoch, err))
+			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
+				top_n = 50
+				print_top_n_surps(model, reader, top_n, famcat=famcat)
+				save_model(model, args.inputfile, reader.argstring + "_epochs" + str(epoch))
+
 # Print top n surprise scores function
 def print_top_n_surps(model, reader, top_n, famcat=None):
 	top_surps = []
@@ -423,8 +444,8 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 			w1_occs.append(w1_occ)
 			w2_occs.append(w2_occ)
 			est_surps.append(surp[2])
-			fc_wk1 = reader.all_keys_to_per_fc_keys[fc][reader.dictionary.token2id[surp[0]]]
-			fc_wk2 = reader.all_keys_to_per_fc_keys[fc][reader.dictionary.token2id[surp[1]]]
+			fc_wk1 = reader.all_keys_to_per_fc_keys[famcat][reader.dictionary.token2id[surp[0]]]
+			fc_wk2 = reader.all_keys_to_per_fc_keys[famcat][reader.dictionary.token2id[surp[1]]]
 			est_coocs.append(evaluate_personalised.estimate_word_pair_cooccurrence(fc_wk1, fc_wk2, model, reader.cooccurrence[famcat]))
 			try:
 				w1_w2_cooccurrence = reader.cooccurrence[famcat][fc_wk1][fc_wk2]
@@ -447,6 +468,7 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 	tab.float_format = ".4"
 	print tab
 
+
 # Main function
 if __name__ == "__main__":
 	# Parse arguments from the command
@@ -458,7 +480,7 @@ if __name__ == "__main__":
 	parser.add_argument("--epochs", default = 25, type=int, help="The number of epochs to train GloVe for.")
 	parser.add_argument("--learning_rate", default=0.1, type=float, help="Learning rate for SGD.")
 	parser.add_argument("--learning_rate_decay", default=25.0, type=float, help="LR is halved after this many epochs, divided by three after twice this, by four after three times this, etc.")
-	parser.add_argument("--print_surprise_every", default=25, type=int, help="Evaluate the whole dataset and print the most surprising every this number of epochs (time consuming).")
+	parser.add_argument("--print_surprise_every", default=100, type=int, help="Evaluate the whole dataset and print the most surprising every this number of epochs (time consuming).")
 	parser.add_argument("--glove_x_max", default = 100.0, type=float, help="x_max parameter in GloVe.")
 	parser.add_argument("--glove_alpha", default = 0.75, type=float, help="alpha parameter in GloVe.")
 	parser.add_argument("--no_below", default = 0.001, type=float,
@@ -489,43 +511,22 @@ if __name__ == "__main__":
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
 
+
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
 
-	# print 'doc_famcats', reader.doc_famcats
-	# print 'doc_raws', reader.doc_raws
-	# print 'cooccurrence', reader.cooccurrence.iteritems()
-
-	init_step_size = args.learning_rate
-	step_size_decay = 25.0
-	cores = multiprocessing.cpu_count() / 2
-
-	# If the familiarity categories (fam_cat) are unknown
+	# If we're not using familiarity categories
 	if not args.use_famcats:
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 							 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values if args.use_sglove else None)
-		logger.info(" ** Training GloVe")
-		for epoch in range(args.epochs):
-			err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
-			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
-			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
-				top_n = 50
-				print_top_n_surps(model, reader, top_n)
-				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+		train_glovex(model, reader, args)
 
-	# If the familiarity categories (fam_cat) are known and will be imported from a file
+
+	# If the familiarity categories will be imported
 	else:
 		for fc, fc_cooccurrence in reader.cooccurrence.iteritems():
 			# Build the GloVex model using the familiarity categories provided
 			model = glovex_model(args.inputfile, reader.argstring + "_fc" + fc, fc_cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 								 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values[fc] if args.use_sglove else None)
 
-			# Train the GloVe model
-			logger.info(" ** Training GloVe for " + fc)
-			for epoch in range(args.epochs):
-				err = model.train(workers=cores, batch_size=100, step_size=init_step_size/(1.0+epoch/step_size_decay))
-				logger.info("   **** Training GloVe for "+fc+": epoch %d, error %.5f" % (epoch, err))
-				if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
-						top_n = 50
-						print_top_n_surps(model, reader, top_n, famcat=fc)
-						save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+			train_glovex(model, reader, args, famcat = fc)

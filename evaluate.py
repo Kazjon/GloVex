@@ -7,20 +7,16 @@ import numpy as np
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
 
-def eval_dataset_surprise(model, acm, top_n_per_doc = 0, log_every=1000, ignore_order=True):
+def eval_dataset_surprise(model, reader, top_n_per_doc = 0, log_every=1000, ignore_order=True):
 	logger.info("  ** Evaluating dataset.")
 	dataset_surps = []
 	count = 0
-	print 'acm.doc_ids', len(acm.doc_ids)
-	print 'acm.doc_titles', len(acm.doc_titles)
-	print 'acm.documents', len(acm.documents)
-	print 'acm.doc_raws', len(acm.doc_raws)
-	# for id,title,doc,raw_doc in zip(acm.doc_ids, acm.doc_titles, acm.documents, acm.doc_raws):
-	for id, doc, raw_doc in zip(acm.doc_ids, acm.documents, acm.doc_raws):
+	# for id,title,doc,raw_doc in zip(reader.doc_ids, reader.doc_titles, reader.documents, reader.doc_raws):
+	for id, doc, raw_doc in zip(reader.doc_ids, reader.documents, reader.doc_raws):
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
-			surps = estimate_document_surprise_pairs(doc, model, acm.cooccurrence, acm.word_occurrence, acm.dictionary, acm.documents, use_sglove=acm.use_sglove, ignore_order=ignore_order)
+			surps = estimate_document_surprise_pairs(doc, model, reader.cooccurrence, reader.word_occurrence, reader.dictionary, reader.documents, use_sglove=reader.use_sglove, ignore_order=ignore_order)
 			if top_n_per_doc and len(surps) > top_n_per_doc:
 				surps = surps[:top_n_per_doc]
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
@@ -162,17 +158,15 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .preprocessed file.")
 	parser.add_argument("--use_sglove", action="store_true",
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
-	parser.add_argument("--use_famcats", action="store_true",
-						help="Whether to train a personalised surprise model using familiarity categories.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
 	if args.dataset == "acm":
-		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID", famcat_column="category" if args.use_famcats else None, run_name=args.name, use_sglove=args.use_sglove)
+		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID",None, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
 		reader = preprocessor.WikiPlot_DocReader(args.inputfile)
 	elif args.dataset == "recipes":
-		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", famcat_column="cuisine" if args.use_famcats else None)
+		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID",None)
 	else:
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
@@ -182,12 +176,16 @@ if __name__ == "__main__":
 
 	# Construct the glovex_model
 	model = preprocessor.glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha,
-						 args.glove_x_max,
-						 args.overwrite_model, use_sglove=args.use_sglove,
+						 args.glove_x_max, args.overwrite_model, use_sglove=args.use_sglove,
 						 p_values=reader.cooccurrence_p_values if args.use_sglove else None)
 
+	if np.sum(model.gradsqb)/len(model.gradsqb) == 1: # Nothing in the model object says how many epochs it's been trained for.  However, if the bias nodes are all 1, it's untrained
+		logger.info(" ** Training created model.")
+		preprocessor.train_glovex(model, reader, args)
+	else:
+		logger.info(" ** Loaded GloVe model.")
+
 	# Evaluate it
-	logger.info(" ** Loaded GloVe")
 	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)
 	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))

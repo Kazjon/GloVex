@@ -362,7 +362,7 @@ def save_model(model,path,args,suffix=".glovex"):
 	with open(path+args+suffix,"wb") as f:
 		pickle.dump(model,f)
 
-def train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, batch_size=1000, step_size_decay=25, famcat=None):
+def train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, batch_size=100, step_size_decay=25, famcat=None):
 	# Train the GloVe model
 	if famcat == None:
 		logger.info(" ** Training GloVe")

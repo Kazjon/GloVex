@@ -267,15 +267,15 @@ if __name__ == "__main__":
 
 	# Get familiarity category of the data from the user survey data
 	# The user's familiarity scores for each cuisine (score: between 0-1) [[0.3, 0.3, 0.5, ], [], [] ... ]
-	# Order of cuisines[mexican, chinese, greek, indian, thai, italian]
+	# Order of cuisines[mexican, chinese, modern, greek, indian, thai, italian]
 	if args.user_survey != None:
 		users_fam = survey_reader(args.user_survey)
 	else:
 		print 'There is no user data, an assumed user will be modeled instead'
 		# user = [random.random() for fc in reader.famcats]
-		users_fam = [[0.5, 0.6, 0.8, 0.6, 0.3, 0.7]]
+		users_fam = [[0.5, 0.6, 0.8, 0.6, 0.3, 0.7, 0.5]]
 		print 'users_fam', users_fam
-		logger.info(" ** Generated fakeuser familiarity profile: " + ", ".join(
+		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
 			[str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))
 
 	# Evaluate personalized surprise model

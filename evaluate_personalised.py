@@ -251,14 +251,18 @@ if __name__ == "__main__":
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
 
-	# Load/train personalized models
-	models = preprocessor.load_personalised_models(args.inputfile, reader)
-	for model,fc in zip(models,reader.famcats):
+	# Load/train personalised models
+	models = []
+	for fc in reader.famcats:
+		model = preprocessor.glovex_model(args.inputfile, reader.argstring+"_fc"+str(fc), reader.cooccurrence[fc],
+										  args.dims, args.glove_alpha, args.glove_x_max,args.overwrite_model,
+										  use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values if args.use_sglove else None)
 		if np.sum(model.gradsqb)/len(model.gradsqb) == 1: # Nothing in the model object says how many epochs it's been trained for.  However, if the bias nodes are all 1, it's untrained
 			logger.info(" ** Training created "+fc+" model.")
 			preprocessor.train_glovex(model, reader, args, famcat=fc)
 		else:
 			logger.info(" ** Loaded GloVe model for "+fc+".")
+		models.append(model)
 
 
 	# Get familiarity category of the data from the user survey data
@@ -271,8 +275,8 @@ if __name__ == "__main__":
 		# user = [random.random() for fc in reader.famcats]
 		users_fam = [[0.5, 0.6, 0.8, 0.6, 0.3, 0.7]]
 		print 'users_fam', users_fam
-		logger.info(" ** Generated user familiarity profile: " + ", ".join(
-			[str(fc) + ": " + str(f) for f, fc in zip(users_fam, reader.famcats)]))
+		logger.info(" ** Generated fakeuser familiarity profile: " + ", ".join(
+			[str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))
 
 	# Evaluate personalized surprise model
 	# Repeat for each user

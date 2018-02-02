@@ -362,13 +362,6 @@ def save_model(model,path,args,suffix=".glovex"):
 	with open(path+args+suffix,"wb") as f:
 		pickle.dump(model,f)
 
-# Load the personalised model function
-def load_personalised_models(filepath, docreader):
-	models = []
-	for fc in docreader.famcats:
-		models.append(glovex_model(filepath, docreader.argstring+"_fc"+str(fc), docreader.cooccurrence[fc]))
-	return models
-
 def train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, batch_size=1000, step_size_decay=25, famcat=None):
 	# Train the GloVe model
 	if famcat == None:

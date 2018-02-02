@@ -233,8 +233,6 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .preprocessed file.")
 	parser.add_argument("--use_sglove", action="store_true",
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
-	parser.add_argument("--use_famcats", action="store_true",
-						help="Whether to train a personalised surprise model using familiarity categories.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
@@ -250,6 +248,7 @@ if __name__ == "__main__":
 
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+
 
 	# Load/train personalised models
 	models = []

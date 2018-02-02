@@ -383,6 +383,28 @@ def train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, bat
 				print_top_n_surps(model, reader, top_n, famcat=famcat)
 				save_model(model, args.inputfile, reader.argstring + "_epochs" + str(epoch))
 
+def train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, batch_size=1000, step_size_decay=25, famcat=None):
+	# Train the GloVe model
+	if famcat == None:
+		logger.info(" ** Training GloVe")
+		for epoch in range(args.epochs):
+			err = model.train(workers=cores, batch_size=batch_size, step_size=args.learning_rate/(1.0+epoch/args.learning_rate_decay))
+			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
+			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
+				top_n = 50
+				print_top_n_surps(model, reader, top_n)
+				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
+	else:
+		logger.info(" ** Training GloVe for " + famcat)
+		for epoch in range(args.epochs):
+			err = model.train(workers=cores, batch_size=batch_size, step_size=args.learning_rate/(1.0+epoch/args.learning_rate_decay))
+			logger.info("   **** Training GloVe for " + famcat + ": epoch %d, error %.5f" % (epoch, err))
+			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
+				top_n = 50
+				print_top_n_surps(model, reader, top_n, famcat=famcat)
+				save_model(model, args.inputfile, reader.argstring + "_epochs" + str(epoch))
+
+
 # Print top n surprise scores function
 def print_top_n_surps(model, reader, top_n, famcat=None):
 	top_surps = []

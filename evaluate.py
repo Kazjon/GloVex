@@ -196,8 +196,9 @@ if __name__ == "__main__":
 		print "  ** 95th percentile surprise:",doc["surprise"]
 		print "  ** Abstract:",doc["raw"]
 		print "  ** Surprising pairs:",doc["surprises"]
-		most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, reader.dictionary)
-		print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
-		for pair in most_similar:
-			print "    ** ",pair[4],":",pair[1]
-		print
+		if len(doc["surprises"]):
+			most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, reader.dictionary)
+			print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
+			for pair in most_similar:
+				print "    ** ",pair[4],":",pair[1]
+			print

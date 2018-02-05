@@ -331,6 +331,7 @@ class Recipe_Reader(DocReader):
 							w not in self.stop]
 				# If not first pass, get the document IDs, text_column and famcats (if self.use_famcats)
 				if self.first_pass:
+					self.total_docs += 1
 					self.doc_ids.append(row[self.id_column])
 					self.doc_raws.append(row[self.text_column])
 					if self.use_famcats:

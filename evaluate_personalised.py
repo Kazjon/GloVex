@@ -16,7 +16,6 @@ def eval_personalised_dataset_surprise(models, reader, user, log_every=1000, ign
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
 			surps = estimate_personalised_document_surprise_pairs(doc, models, reader, user, ignore_order=ignore_order)
-			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
 			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":convert_personalised_to_combined_surprise(surps, reader.dictionary), "surprise": document_surprise(surps)})
 		else:
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
@@ -29,7 +28,8 @@ def convert_personalised_to_combined_surprise(surps, dictionary):
 	surplist = []
 	for k1,v1 in surps.iteritems():
 		for k2,v2 in v1.iteritems():
-			surplist.append((dictionary.id2token[k1], dictionary.id2token[k2], dict(v2)["combined"]))
+			surps_without_combined = tuple([s for s in v2 if s[0] is not "combined"])
+			surplist.append((dictionary.id2token[k1], dictionary.id2token[k2], dict(v2)["combined"], surps_without_combined))
 	return surplist
 
 def document_surprise(surps, percentile=95):
@@ -70,7 +70,7 @@ def combine_surprise(surps, user):
 #Note: Need to re-investigate exactly what the reported surprise values are before this can be used properly.
 def combine_surprise_across_famcats_for_user(surprises,user, method="weighted_sum"):
 	if method == "weighted_sum":
-			return sum(s[1]*user[s[0]] for s in surprises)
+			return sum(s[1]*user[s[0]] for s in surprises)/len(surprises)
 	else:
 		raise NotImplementedError
 
@@ -287,7 +287,7 @@ if __name__ == "__main__":
 			print doc["id"]+": (no titles currently)"#, doc["title"]
 			print "  ** 95th percentile surprise:",doc["surprise"]
 			print "  ** Document text:",doc["raw"]
-			print "  ** Surprising pairs:",doc["surprises"]
+			print "  ** Surprising pairs (personalised):",doc["surprises"]
 
 			#if len(doc["surprises"]):
 			#	# most_similar = most_similar_differences(doc["surprises"][0],unique_surps, model, reader.dictionary)

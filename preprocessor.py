@@ -95,7 +95,7 @@ class DocReader(object):
 			self.first_pass = False
 
 	# Preprocessing function of the Document reader
-	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False):
+	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False, export_dictionary = False):
 		if self.run_name is not None:
 			self.argstring = "_"+self.run_name+"_below"+str(no_below)+"_above"+str(no_above)
 		else:
@@ -111,6 +111,18 @@ class DocReader(object):
 			logger.info("   **** BoW representations constructed.")
 			self.calc_cooccurrence()
 			logger.info("   **** Co-occurrence matrix constructed.")
+			if export_dictionary:
+				with open(self.filepath+self.argstring+"_dictionary.csv","wb") as df:
+					writer = csv.writer(df)
+					occs = []
+					if self.use_famcats:
+						for w in self.dictionary.values():
+							occ = [self.word_occurrence[fc][w] if w in self.word_occurrence[fc].keys() else 0 for fc in self.famcats]
+							occs.append(sum(occ))
+					else:
+						occs = [self.word_occurrence[w] for w in self.dictionary.values()]
+					writer.writerows([w,int(o)] for w,o in zip(self.dictionary.values(),occs))
+				logger.info("   **** Dictionary exported.")
 			if self.use_sglove:
 				self.calc_cooccurrence_significance_parallel()
 				logger.info("   **** Co-occurrence signficance matrix calculated.")
@@ -511,6 +523,8 @@ if __name__ == "__main__":
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
 	parser.add_argument("--use_famcats", action="store_true",
 						help="Whether to train a personalised surprise model using familiarity categories.")
+	parser.add_argument("--export_dictionary", action="store_true",
+						help="Whether to export a CSV containing all the features in the vocabulary after preprocessing.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
@@ -529,7 +543,7 @@ if __name__ == "__main__":
 
 
 	# Preprocess the data
-	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing, export_dictionary=args.export_dictionary)
 
 	# If we're not using familiarity categories
 	if not args.use_famcats:

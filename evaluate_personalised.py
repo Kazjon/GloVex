@@ -295,7 +295,8 @@ if __name__ == "__main__":
 	else:
 		print 'There is no user data, an assumed user will be modeled instead'
 		# user = [random.random() for fc in reader.famcats]
-		users_fam = [[0.5, 0.6, 0.8, 0.6, 0.3, 0.7, 0.5]]
+		#users_fam = [[0.5, 0.6, 0.8, 0.6, 0.3, 0.7, 0.5]]
+		users_fam = [[1., 1., 1., 1., 1., 1., 1.]]
 		print 'users_fam', users_fam
 		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
 			[str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))

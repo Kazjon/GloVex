@@ -45,7 +45,8 @@ def estimate_personalised_document_surprise_pairs(doc, models, reader, user, top
 		rekeyed_doc = [(reader.all_keys_to_per_fc_keys[fc][k],v) for k,v in doc if k in reader.all_keys_to_per_fc_keys[fc].keys()]
 		est_cooc_mat = estimate_document_cooccurrence_matrix(rekeyed_doc,model,reader.cooccurrence[fc])
 		document_cooccurrence_to_surprise(surps, fc, rekeyed_doc, est_cooc_mat, reader.word_occurrence[fc], reader.dictionary, reader.per_fc_keys_to_all_keys[fc], reader.docs_per_fc[fc], ignore_order=ignore_order)
-	combine_surprise(surps, {fc:f for fc,f in zip(reader.famcats,user)})
+	#combine_surprise_weighted_sum(surps, {fc: f for fc, f in zip(reader.famcats, user)})
+	combine_surprise_normalised(surps, reader, {fc:f for fc,f in zip(reader.famcats,user)})
 	return surps
 
 def estimate_personalised_document_surprise_pairs_one_fc(doc, model, fc, reader, top_n_per_doc = 0, ignore_order=True):
@@ -61,18 +62,40 @@ def estimate_personalised_document_surprise_pairs_one_fc(doc, model, fc, reader,
 		return surps_list[:top_n_per_doc]
 	return surps_list
 
-def combine_surprise(surps, user):
+def combine_surprise_weighted_sum(surps, user):
 	for w1,w1_pairs in surps.iteritems():
 		for w2 in w1_pairs:
-			surps[w1][w2].append(("combined",combine_surprise_across_famcats_for_user(surps[w1][w2],user, method="weighted_sum")))
+			# Multiply the surprise for each category by the user's familiarity with that category, sum up and divide by the number of categories.
+			surps[w1][w2].append(("combined",sum(s[1] * user[s[0]] for s in surps) / len(surps)))
 
-#Different methods for combining the surprise predictions from each famcat. Current method is a placeholder only.
-#Note: Need to re-investigate exactly what the reported surprise values are before this can be used properly.
-def combine_surprise_across_famcats_for_user(surprises,user, method="weighted_sum"):
-	if method == "weighted_sum":
-			return sum(s[1]*user[s[0]] for s in surprises)/len(surprises)
-	else:
-		raise NotImplementedError
+def combine_surprise_normalised(surps, reader, user):
+	for w1, w1_pairs in surps.iteritems():
+		for w2 in w1_pairs:
+			w1_str = reader.dictionary[w1]
+			w2_str = reader.dictionary[w2]
+			w1_occs_by_famcat = [reader.word_occurrence[fc][w1_str] if w1_str in reader.word_occurrence[fc] else 0 for fc in reader.famcats]
+			w2_occs_by_famcat = [reader.word_occurrence[fc][w2_str] if w2_str in reader.word_occurrence[fc] else 0 for fc in reader.famcats]
+			coocs_by_famcat = []
+			for fc in reader.famcats:
+				try:
+					cooc = reader.cooccurrence[fc][reader.all_keys_to_per_fc_keys[fc][w1]][reader.all_keys_to_per_fc_keys[fc][w2]]
+				except KeyError:
+					cooc = 0
+				coocs_by_famcat.append(cooc)
+			# Multiply word occurrences in each category by the user's familiarity with that category, sum them all up and calculate surprise
+			cooc = sum([c * user[fc] for c, fc in zip(coocs_by_famcat, reader.famcats)])
+			w1_occs = sum([c * user[fc] for c, fc in zip(w1_occs_by_famcat, reader.famcats)])
+			w2_occs = sum([c * user[fc] for c, fc in zip(w2_occs_by_famcat, reader.famcats)])
+
+			surps[w1][w2].append(("combined", evaluate.word_pair_surprise(cooc, w1_occs, w2_occs, reader.total_docs)))
+
+
+def combine_surprise_across_famcats_for_user_normalised(w1_occs_by_famcat, w2_occs_by_famcat,coocs_by_famcat, n_docs, user):
+	# Multiply word occurrences in each category by the user's familiarity with that category, sum them all up and calculate surprise
+	cooc = sum([c*fc for c,fc in zip(coocs_by_famcat,user)])
+	w1_occs = sum([c*fc for c,fc in zip(w1_occs_by_famcat,user)])
+	w2_occs = sum([c*fc for c,fc in zip(w2_occs_by_famcat,user)])
+	return evaluate.word_pair_surprise(cooc,w1_occs,w2_occs,n_docs)
 
 
 def extract_document_cooccurrence_matrix(doc, coocurrence):

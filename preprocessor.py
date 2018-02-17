@@ -327,11 +327,11 @@ class WikiPlot_DocReader(DocReader):
 
 # Recipe Document reader
 class Recipe_Reader(DocReader):
-	def __init__(self,path, text_column, id_column, famcat_column=None):
+	def __init__(self,path, text_column, id_column, famcat_column=None, run_name=None, use_sglove=False):
 		self.text_column = text_column
 		self.id_column = id_column
 		self.famcat_column = famcat_column
-		DocReader.__init__(self,path, use_famcats=famcat_column is not None)
+		DocReader.__init__(self,path, use_famcats=famcat_column is not None, run_name=run_name, use_sglove=use_sglove)
 
 	# The iterator of the Recipe Document reader
 	def __iter__(self):

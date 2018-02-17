@@ -164,9 +164,9 @@ if __name__ == "__main__":
 	if args.dataset == "acm":
 		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID",None, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
-		reader = preprocessor.WikiPlot_DocReader(args.inputfile)
+		reader = preprocessor.WikiPlot_DocReader(args.inputfile, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "recipes":
-		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID",None)
+		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID",None, run_name=args.name, use_sglove=args.use_sglove)
 	else:
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()

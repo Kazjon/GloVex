@@ -8,7 +8,7 @@ import cython
 import numpy as np
 cimport numpy as np
 
-from libc.math cimport exp, log, pow, sqrt
+from libc.math cimport exp, log, pow, sqrt, fmin
 
 ctypedef np.float64_t REAL_t
 ctypedef np.uint32_t  INT_t
@@ -37,7 +37,8 @@ cdef void train_glove_thread(
             diff += W[b + l1] * ContextW[b + l2] # dot product of word and context word vector
         diff += bias[job_key[example_idx]] + ContextB[job_subkey[example_idx]] - log(job_target[example_idx]) # add separate bias for each word
         #fdiff = diff if (job_target[example_idx] > x_max) else pow(job_target[example_idx] / x_max, alpha) * diff # multiply weighting function (f) with diff
-        fdiff = diff * (1-job_pvals[example_idx]) # multiply weighting function (f) with diff
+        #fdiff = diff * (1-job_pvals[example_idx]) # multiply weighting function (f) with diff
+        fdiff =  diff * (1-fmin(job_pvals[example_idx],0.9)) # multiply weighting function (f) with diff but don't penalise more than 90%.
         error[0] += 0.5 * fdiff * diff # weighted squared error
 
         # # Adaptive gradient updates

@@ -1,4 +1,4 @@
-import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, argparse, glob
+import csv,gensim,logging,sys,os.path,multiprocessing, io, argparse, glob
 import s_glove
 from glove import glove
 import cPickle as pickle
@@ -50,6 +50,7 @@ def significance_on_tuple(sig_tuple):
 	pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence-cooccurrences,(n_docs-w1_occurrence-w2_occurrence+cooccurrences))
 	# pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence,(n_docs-w1_occurrence))
 	#print sig_tuple, pvalue.left_tail, pvalue.right_tail
+	#return (pvalue.left_tail,pvalue.right_tail,pvalue.two_tail)
 	return pvalue.left_tail
 
 
@@ -257,9 +258,10 @@ class DocReader(object):
 			#computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple)(sig) for sig in sigs_to_compute)
 
 			sigs_sublists = [list(sl) for sl in np.array_split(sigs_to_compute,multiprocessing.cpu_count()/2)]
-			computed_sigs = itertools.chain.from_iterable(Parallel(n_jobs=multiprocessing.cpu_count()/2, max_nbytes=1e12)(delayed(significance_on_tuple_batch)(sigs) for sigs in sigs_sublists))
+			computed_sigs = itertools.chain.from_iterable(Parallel(n_jobs=multiprocessing.cpu_count()-1, max_nbytes=1e12)(delayed(significance_on_tuple_batch)(sigs) for sigs in sigs_sublists))
 			for sig,p in zip(sigs_to_compute,computed_sigs):
-				#print sig, p
+				#if sig[2] > 100 and sig[3] > 100:
+				#	print sig, p
 				self.cooccurrence_p_values[sig[0]][sig[1]] = p
 
 # ACMDL Document reader which is a subclass of the Document reader
@@ -525,6 +527,8 @@ if __name__ == "__main__":
 						help="Whether to train a personalised surprise model using familiarity categories.")
 	parser.add_argument("--export_dictionary", action="store_true",
 						help="Whether to export a CSV containing all the features in the vocabulary after preprocessing.")
+	parser.add_argument("--export_vectors", action="store_true",
+						help="Whether to export a CSV containing each feature and its vector representation after training.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
@@ -560,3 +564,5 @@ if __name__ == "__main__":
 								 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values[fc] if args.use_sglove else None)
 
 			train_glovex(model, reader, args, famcat = fc)
+
+		

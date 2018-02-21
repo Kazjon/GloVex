@@ -95,12 +95,20 @@ class DocReader(object):
 			self.famcats = self.cooccurrence.keys()
 			self.first_pass = False
 
+	def export_vectors(self,model):
+		with open(self.filepath+self.argstring+"_vectors.csv","wb") as ef:
+			writer = csv.writer(ef)
+			writer.writerows([[wk,w]+list(model.W[wk])+list(model.ContextW[wk]) for wk,w in self.dictionary.id2token.iteritems()])
+			logger.info("   **** Vectors exported.")
+
 	# Preprocessing function of the Document reader
 	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False, export_dictionary = False):
 		if self.run_name is not None:
 			self.argstring = "_"+self.run_name+"_below"+str(no_below)+"_above"+str(no_above)
 		else:
 			self.argstring = "_below"+str(no_below)+"_above"+str(no_above)
+		if self.use_sglove:
+			self.argstring += "_sglove"
 		preprocessed_path = self.filepath+self.argstring+suffix
 		if not os.path.exists(preprocessed_path) or force_overwrite:
 			logger.info(" ** Pre-processing started.")
@@ -527,8 +535,8 @@ if __name__ == "__main__":
 						help="Whether to train a personalised surprise model using familiarity categories.")
 	parser.add_argument("--export_dictionary", action="store_true",
 						help="Whether to export a CSV containing all the features in the vocabulary after preprocessing.")
-	parser.add_argument("--export_vectors", action="store_true",
-						help="Whether to export a CSV containing each feature and its vector representation after training.")
+						help="Whether to export a CSV containing each feature and its vector representation after training. "
+							 " Currently only implemented for oracle mode (no famcats).")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
@@ -554,6 +562,8 @@ if __name__ == "__main__":
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 							 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values if args.use_sglove else None)
 		train_glovex(model, reader, args)
+		if args.export_vectors:
+			reader.export_vectors(model)
 
 
 	# If the familiarity categories will be imported
@@ -565,4 +575,4 @@ if __name__ == "__main__":
 
 			train_glovex(model, reader, args, famcat = fc)
 
-		
+

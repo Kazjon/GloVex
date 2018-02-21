@@ -162,6 +162,10 @@ if __name__ == "__main__":
 	parser.add_argument("--export_vectors", action="store_true",
 						help="Whether to export a CSV containing each feature and its vector representation after training. "
 							 " Currently only implemented for oracle mode (no famcats).")
+	parser.add_argument("--export_estimated_surprise", action="store_true",
+						help="Whether to export a CSV containing a features*features matrix of estimated surprises.")
+	parser.add_argument("--export_observed_surprise", action="store_true",
+						help="Whether to export a CSV containing a features*features matrix of actually observed surprises.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
@@ -192,6 +196,10 @@ if __name__ == "__main__":
 
 	if args.export_vectors:
 		reader.export_vectors(model)
+	if args.export_observed_surprise:
+		reader.export_observed_surprise()
+	if args.export_estimated_surprise:
+		reader.export_estimated_surprise(model)
 
 	# Evaluate it
 	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)

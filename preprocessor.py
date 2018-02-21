@@ -99,7 +99,33 @@ class DocReader(object):
 		with open(self.filepath+self.argstring+"_vectors.csv","wb") as ef:
 			writer = csv.writer(ef)
 			writer.writerows([[wk,w]+list(model.W[wk])+list(model.ContextW[wk]) for wk,w in self.dictionary.id2token.iteritems()])
-			logger.info("   **** Vectors exported.")
+		logger.info("   **** Vectors exported.")
+
+	def export_observed_surprise(self):
+		if self.use_famcats:
+			raise NotImplementedError
+		with open(self.filepath + self.argstring + "_observed_surprise.csv", "wb") as ef:
+			writer = csv.writer(ef)
+			surpmat = np.zeros((len(self.dictionary.id2token.keys()),len(self.dictionary.id2token.keys())))
+			for wk1, w1 in self.dictionary.id2token.iteritems():
+				for wk2, w2 in self.dictionary.id2token.iteritems():
+					if wk1 != wk2:
+						surpmat[wk1,wk2] = evaluate.word_pair_surprise(self.cooccurrence[wk1][wk2], self.word_occurrence[w1], self.word_occurrence[w2], self.n_docs)
+			writer.writerows(list(surpmat))
+		logger.info("   **** Observed surprise exported.")
+
+	def export_surprise(self, model):
+		if self.use_famcats:
+			raise NotImplementedError
+		with open(self.filepath + self.argstring + "_estimated_surprise.csv", "wb") as ef:
+			writer = csv.writer(ef)
+			surpmat = np.zeros((len(self.dictionary.id2token.keys()),len(self.dictionary.id2token.keys())))
+			for wk1, w1 in self.dictionary.id2token.iteritems():
+				for wk2, w2 in self.dictionary.id2token.iteritems():
+					if wk1 != wk2:
+						surpmat[wk1,wk2] = evaluate.word_pair_surprise(evaluate.estimate_word_pair_cooccurrence(wk1,wk2,model, self.cooccurrence), self.word_occurrence[w1], self.word_occurrence[w2], self.n_docs)
+			writer.writerows(list(surpmat))
+		logger.info("   **** Estimated surprise exported.")
 
 	# Preprocessing function of the Document reader
 	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False, export_dictionary = False):

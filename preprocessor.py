@@ -535,6 +535,7 @@ if __name__ == "__main__":
 						help="Whether to train a personalised surprise model using familiarity categories.")
 	parser.add_argument("--export_dictionary", action="store_true",
 						help="Whether to export a CSV containing all the features in the vocabulary after preprocessing.")
+	parser.add_argument("--export_vectors", action="store_true",
 						help="Whether to export a CSV containing each feature and its vector representation after training. "
 							 " Currently only implemented for oracle mode (no famcats).")
 	args = parser.parse_args()

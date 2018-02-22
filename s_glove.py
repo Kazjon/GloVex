@@ -3,10 +3,14 @@ from multiprocessing import Queue, Lock
 import threading
 import numpy as np
 from scipy import stats
+import os
+
 import pyximport
-pyximport.install(setup_args={"include_dirs": np.get_include()})
+pyximport.install(setup_args={"include_dirs": np.get_include()},reload_support=True)
 
 from s_glove_inner import train_glove
+
+os.environ["CPPFLAGS"] = os.getenv("CPPFLAGS", "") + "-I" + np.get_include()
 
 class Glove(object):
     def __init__(self, cooccurence, p_values, alpha=0.75, x_max=100.0, d=50, seed=1234):

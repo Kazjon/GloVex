@@ -1,4 +1,4 @@
-import csv,gensim,logging,sys,os.path,multiprocessing, nltk, io, argparse, glob
+import csv,gensim,logging,sys,os.path,multiprocessing, io, argparse, glob
 import s_glove
 from glove import glove
 import cPickle as pickle
@@ -50,6 +50,7 @@ def significance_on_tuple(sig_tuple):
 	pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence-cooccurrences,(n_docs-w1_occurrence-w2_occurrence+cooccurrences))
 	# pvalue = fisher.pvalue(cooccurrences,w2_occurrence-cooccurrences,w1_occurrence,(n_docs-w1_occurrence))
 	#print sig_tuple, pvalue.left_tail, pvalue.right_tail
+	#return (pvalue.left_tail,pvalue.right_tail,pvalue.two_tail)
 	return pvalue.left_tail
 
 
@@ -94,12 +95,20 @@ class DocReader(object):
 			self.famcats = self.cooccurrence.keys()
 			self.first_pass = False
 
+	def export_vectors(self,model):
+		with open(self.filepath+self.argstring+"_vectors.csv","wb") as ef:
+			writer = csv.writer(ef)
+			writer.writerows([[wk,w]+list(model.W[wk])+list(model.ContextW[wk]) for wk,w in self.dictionary.id2token.iteritems()])
+			logger.info("   **** Vectors exported.")
+
 	# Preprocessing function of the Document reader
-	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False):
+	def preprocess(self,suffix=".preprocessed", no_below=0.001, no_above=0.5, force_overwrite = False, export_dictionary = False):
 		if self.run_name is not None:
 			self.argstring = "_"+self.run_name+"_below"+str(no_below)+"_above"+str(no_above)
 		else:
 			self.argstring = "_below"+str(no_below)+"_above"+str(no_above)
+		if self.use_sglove:
+			self.argstring += "_sglove"
 		preprocessed_path = self.filepath+self.argstring+suffix
 		if not os.path.exists(preprocessed_path) or force_overwrite:
 			logger.info(" ** Pre-processing started.")
@@ -111,6 +120,18 @@ class DocReader(object):
 			logger.info("   **** BoW representations constructed.")
 			self.calc_cooccurrence()
 			logger.info("   **** Co-occurrence matrix constructed.")
+			if export_dictionary:
+				with open(self.filepath+self.argstring+"_dictionary.csv","wb") as df:
+					writer = csv.writer(df)
+					occs = []
+					if self.use_famcats:
+						for w in self.dictionary.values():
+							occ = [self.word_occurrence[fc][w] if w in self.word_occurrence[fc].keys() else 0 for fc in self.famcats]
+							occs.append(sum(occ))
+					else:
+						occs = [self.word_occurrence[w] for w in self.dictionary.values()]
+					writer.writerows([w,int(o)] for w,o in zip(self.dictionary.values(),occs))
+				logger.info("   **** Dictionary exported.")
 			if self.use_sglove:
 				self.calc_cooccurrence_significance_parallel()
 				logger.info("   **** Co-occurrence signficance matrix calculated.")
@@ -245,9 +266,10 @@ class DocReader(object):
 			#computed_sigs = Parallel(n_jobs=-1)(delayed(significance_on_tuple)(sig) for sig in sigs_to_compute)
 
 			sigs_sublists = [list(sl) for sl in np.array_split(sigs_to_compute,multiprocessing.cpu_count()/2)]
-			computed_sigs = itertools.chain.from_iterable(Parallel(n_jobs=multiprocessing.cpu_count()/2, max_nbytes=1e12)(delayed(significance_on_tuple_batch)(sigs) for sigs in sigs_sublists))
+			computed_sigs = itertools.chain.from_iterable(Parallel(n_jobs=multiprocessing.cpu_count()-1, max_nbytes=1e12)(delayed(significance_on_tuple_batch)(sigs) for sigs in sigs_sublists))
 			for sig,p in zip(sigs_to_compute,computed_sigs):
-				#print sig, p
+				#if sig[2] > 100 and sig[3] > 100:
+				#	print sig, p
 				self.cooccurrence_p_values[sig[0]][sig[1]] = p
 
 # ACMDL Document reader which is a subclass of the Document reader
@@ -315,11 +337,11 @@ class WikiPlot_DocReader(DocReader):
 
 # Recipe Document reader
 class Recipe_Reader(DocReader):
-	def __init__(self,path, text_column, id_column, famcat_column=None):
+	def __init__(self,path, text_column, id_column, famcat_column=None, run_name=None, use_sglove=False):
 		self.text_column = text_column
 		self.id_column = id_column
 		self.famcat_column = famcat_column
-		DocReader.__init__(self,path, use_famcats=famcat_column is not None)
+		DocReader.__init__(self,path, use_famcats=famcat_column is not None, run_name=run_name, use_sglove=use_sglove)
 
 	# The iterator of the Recipe Document reader
 	def __iter__(self):
@@ -511,6 +533,11 @@ if __name__ == "__main__":
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
 	parser.add_argument("--use_famcats", action="store_true",
 						help="Whether to train a personalised surprise model using familiarity categories.")
+	parser.add_argument("--export_dictionary", action="store_true",
+						help="Whether to export a CSV containing all the features in the vocabulary after preprocessing.")
+	parser.add_argument("--export_vectors", action="store_true",
+						help="Whether to export a CSV containing each feature and its vector representation after training. "
+							 " Currently only implemented for oracle mode (no famcats).")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
@@ -529,13 +556,15 @@ if __name__ == "__main__":
 
 
 	# Preprocess the data
-	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing, export_dictionary=args.export_dictionary)
 
 	# If we're not using familiarity categories
 	if not args.use_famcats:
 		model = glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha, args.glove_x_max,
 							 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values if args.use_sglove else None)
 		train_glovex(model, reader, args)
+		if args.export_vectors:
+			reader.export_vectors(model)
 
 
 	# If the familiarity categories will be imported
@@ -546,3 +575,5 @@ if __name__ == "__main__":
 								 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values[fc] if args.use_sglove else None)
 
 			train_glovex(model, reader, args, famcat = fc)
+
+

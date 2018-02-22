@@ -100,7 +100,7 @@ def document_cooccurrence_to_surprise(doc, cooc_mat, word_occurrence, dictionary
 def most_similar_features(surp, surp_list, model, dictionary, n = 10):
 	results = []
 	for surp2 in surp_list:
-		if not surp[:2] == surp2[:2]:
+		if not surp[0] == surp2[0]:
 			surp_feat = model.W[dictionary.token2id[surp[0]]]
 			surp2_feat = model.W[dictionary.token2id[surp2[0]]]
 			results.append([surp,surp2,scipy.spatial.distance.euclidean(surp_feat, surp2_feat)])
@@ -113,7 +113,7 @@ def most_similar_features(surp, surp_list, model, dictionary, n = 10):
 def most_similar_contexts(surp, surp_list, model, dictionary, n = 10):
 	results = []
 	for surp2 in surp_list:
-		if not surp[:2] == surp2[:2]:
+		if not surp[1] == surp2[1]:
 			surp_context = model.W[dictionary.token2id[surp[1]]]
 			surp2_context = model.W[dictionary.token2id[surp2[1]]]
 			results.append([surp,surp2,scipy.spatial.distance.euclidean(surp_context, surp2_context)])
@@ -126,10 +126,11 @@ def most_similar_contexts(surp, surp_list, model, dictionary, n = 10):
 def most_similar_differences(surp, surp_list, model, dictionary, n = 10):
 	results = []
 	for surp2 in surp_list:
-		if not surp[:2] == surp2[:2]:
+		#if not surp[:2] == surp2[:2]:
+		if not surp[0] in surp2[:2] and not surp[1] in surp2[:2]:
 			surp_diff = model.W[dictionary.token2id[surp[0]]] -  model.W[dictionary.token2id[surp[1]]]
 			surp2_diff = model.W[dictionary.token2id[surp2[0]]] -  model.W[dictionary.token2id[surp2[1]]]
-			results.append([surp,surp2,surp_diff,surp2_diff,scipy.spatial.distance.euclidean(surp_diff, surp2_diff)])
+			results.append([surp,surp2,surp_diff,surp2_diff,scipy.spatial.distance.cosine(surp_diff, surp2_diff)])
 	results.sort(key = lambda x: x[4])
 	if n and n < len(results):
 		return results[:n]
@@ -158,15 +159,18 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .preprocessed file.")
 	parser.add_argument("--use_sglove", action="store_true",
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
+	parser.add_argument("--export_vectors", action="store_true",
+						help="Whether to export a CSV containing each feature and its vector representation after training. "
+							 " Currently only implemented for oracle mode (no famcats).")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
 	if args.dataset == "acm":
 		reader = preprocessor.ACMDL_DocReader(args.inputfile, "title", "abstract", "ID",None, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "plots":
-		reader = preprocessor.WikiPlot_DocReader(args.inputfile)
+		reader = preprocessor.WikiPlot_DocReader(args.inputfile, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "recipes":
-		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID",None)
+		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID",None, run_name=args.name, use_sglove=args.use_sglove)
 	else:
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
@@ -185,6 +189,10 @@ if __name__ == "__main__":
 	else:
 		logger.info(" ** Loaded GloVe model.")
 
+
+	if args.export_vectors:
+		reader.export_vectors(model)
+
 	# Evaluate it
 	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)
 	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
@@ -200,5 +208,5 @@ if __name__ == "__main__":
 			most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, reader.dictionary)
 			print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
 			for pair in most_similar:
-				print "    ** ",pair[4],":",pair[1]
-			print
+				print "    ** ", pair[4], ":", pair[1]
+print

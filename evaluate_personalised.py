@@ -1,4 +1,5 @@
-import argparse, logging, scipy, itertools, random, sys, numpy as np, pandas as pd
+import os, argparse, logging, scipy, itertools, random, sys, numpy as np, pandas as pd, pprint, pickle, json
+pp = pprint.PrettyPrinter(indent=4)
 
 import preprocessor, evaluate
 
@@ -21,6 +22,8 @@ def eval_personalised_dataset_surprise(models, reader, user, log_every=1000, ign
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
 			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":[], "surprise": float("-inf")})
 		count+=1
+		# # Just for quick debugging
+		# break
 	logger.info("  ** Evaluation complete.")
 	return dataset_surps
 
@@ -209,10 +212,12 @@ def survey_reader(qchef_surveydata_fn):
 	return user_fam_scaled_arr.tolist()
 
 if __name__ == "__main__":
+	cwd = os.getcwd()
 	# Parse arguments from the command
 	parser = argparse.ArgumentParser(description="Evaluate a dataset using a trained GloVex model.")
 	parser.add_argument("inputfile", help='The input file path to work with (omit the args and suffix)')
 	parser.add_argument("--user_survey", default=None, type=str, help='The input file path to the user survey')
+	parser.add_argument("--surprise_recipes", default=None, type=str, help='The input file path to the surprise recipes')
 	# Argument to chekc the function used for modern
 	parser.add_argument("--dataset", default="acm", type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
 	parser.add_argument("--name", default=None, type=str, help="Name of this run (used when saving files.)")
@@ -272,27 +277,53 @@ if __name__ == "__main__":
 	else:
 		print 'There is no user data, an assumed user will be modeled instead'
 		# user = [random.random() for fc in reader.famcats]
-		users_fam = [[0.5, 0.6, 0.8, 0.6, 0.3, 0.7, 0.5]]
+		users_fam = [
+			[0.5, 0.6, 0.8, 0.6, 0.3, 0.7, 0.5],
+			[0.4, 0.3, 0.2, 0.8, 0.6, 0.7, 0.2]
+					 ]
 		print 'users_fam', users_fam
 		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
 			[str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))
 
+	if args.surprise_recipes != None:
+		surprise_recipe_reader = preprocessor.Recipe_Reader(args.surprise_recipes, "Title and Ingredients", "ID", famcat_column="cuisine")
+		surprise_recipe_reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+	else:
+		print 'No surprise recipes provided, so will use the input recipes which the model was built on\nThis will take a long time.'
+		surprise_recipe_reader = reader
+
 	# Evaluate personalized surprise model
 	# Repeat for each user
-	for user in users_fam:
-		dataset_surps = eval_personalised_dataset_surprise(models, reader, user)
+	print 'Number of users:', len(users_fam)
+	user_suprise_estimates = {}
+	for user_idx, user_fam_cat in enumerate(users_fam):
+		print "User's familiarity", user_idx, user_fam_cat
+		user_suprise_estimates['user_' + str(user_idx)] = {'user_fam_cat': user_fam_cat}
+		# dataset_surps = eval_personalised_dataset_surprise(models, reader, user_fam_cat)
+		dataset_surps = eval_personalised_dataset_surprise(models, surprise_recipe_reader, user_fam_cat)
 		dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 		unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
 		for doc in dataset_surps[:10]:
-			print doc["id"]+": (no titles currently)"#, doc["title"]
-			print "  ** 95th percentile surprise:",doc["surprise"]
-			print "  ** Document text:",doc["raw"]
-			print "  ** Surprising pairs (personalised):",doc["surprises"]
-
+			pp.pprint(doc)
+			# print doc["id"]+": (no titles currently)"#, doc["title"]
+			# print "  ** 95th percentile surprise:",doc["surprise"]
+			# print "  ** Document text:",doc["raw"]
+			# print "  ** Surprising pairs (personalised):",doc["surprises"]
+			# print 'user_' + str(user_idx), user_fam_cat, doc["id"], doc["surprise"], doc["raw"], doc["surprises"]
+			user_suprise_estimates['user_' + str(user_idx)]['recipe_id'] = doc['id']
+			user_suprise_estimates['user_' + str(user_idx)]['95th_percentile'] = doc['surprise']
+			user_suprise_estimates['user_' + str(user_idx)]['ingredients'] = doc['raw']
+			user_suprise_estimates['user_' + str(user_idx)]['surprise_cuisine'] = []
+			for surprise_combination in doc['surprises']:
+				user_suprise_estimates['user_' + str(user_idx)]['surprise_cuisine'].append(surprise_combination)
 			#if len(doc["surprises"]):
 			#	# most_similar = most_similar_differences(doc["surprises"][0],unique_surps, model, reader.dictionary)
 			#	most_similar = most_similar_differences_personal(doc["surprises"][0],unique_surps, models, reader.dictionary)
 			#	print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
 			#	for pair in most_similar:
 			#		print "    ** ",pair[4],":",pair[1]
-			print
+	# print 'user_suprise_estimates', user_suprise_estimates
+	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/new/user_suprise_estimates.pickle'
+	pickle.dump(user_suprise_estimates, open(user_suprise_estimates_pickle_fn, 'wb'))
+	user_suprise_estimates_json_fn = cwd + 'GloVex/results/new/user_suprise_estimates.json'
+	json.dump(user_suprise_estimates, open(user_suprise_estimates_json_fn, 'w'))

@@ -253,7 +253,8 @@ if __name__ == "__main__":
 
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
-
+	# surprise_recipe_reader.per_fc_keys_to_all_keys = reader.per_fc_keys_to_all_keys
+	# reader.all_keys_to_per_fc_keys
 
 	# Load/train personalised models
 	models = []
@@ -285,6 +286,7 @@ if __name__ == "__main__":
 		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
 			[str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))
 
+	# Input the surprise recipes
 	if args.surprise_recipes != None:
 		surprise_recipe_reader = preprocessor.Recipe_Reader(args.surprise_recipes, "Title and Ingredients", "ID", famcat_column="cuisine")
 		surprise_recipe_reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)

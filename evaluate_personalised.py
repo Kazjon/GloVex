@@ -6,13 +6,11 @@ import preprocessor, evaluate
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
 
-def eval_personalised_dataset_surprise(models, reader, user, log_every=1000, ignore_order=True):
-# def eval_personalised_dataset_surprise(models, acm, user, top_n_per_doc=25, log_every=1000, ignore_order=True):
+def eval_personalised_dataset_surprise(models, reader, user, log_every=1000, ignore_order=True, offset=0):
 	logger.info("  ** Evaluating dataset..")
 	dataset_surps = []
 	count = 0
-	# for id,title,doc,raw_doc in zip(acm.doc_ids, acm.doc_titles, acm.documents, acm.doc_raws):
-	for id, doc, raw_doc in zip(reader.doc_ids, reader.documents, reader.doc_raws):
+	for id, doc, raw_doc in zip(reader.doc_ids[offset:], reader.documents[offset:], reader.doc_raws[offset:]):
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
@@ -22,8 +20,6 @@ def eval_personalised_dataset_surprise(models, reader, user, log_every=1000, ign
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
 			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":[], "surprise": float("-inf")})
 		count+=1
-		# # Just for quick debugging
-		# break
 	logger.info("  ** Evaluation complete.")
 	return dataset_surps
 
@@ -76,7 +72,6 @@ def combine_surprise_across_famcats_for_user(surprises,user, method="weighted_su
 			return sum(s[1]*user[s[0]] for s in surprises)/len(surprises)
 	else:
 		raise NotImplementedError
-
 
 def extract_document_cooccurrence_matrix(doc, coocurrence):
 	cooc_mat = np.zeros([len(doc),len(doc)])
@@ -253,8 +248,6 @@ if __name__ == "__main__":
 
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
-	# surprise_recipe_reader.per_fc_keys_to_all_keys = reader.per_fc_keys_to_all_keys
-	# reader.all_keys_to_per_fc_keys
 
 	# Load/train personalised models
 	models = []
@@ -268,7 +261,6 @@ if __name__ == "__main__":
 		else:
 			logger.info(" ** Loaded GloVe model for "+fc+".")
 		models.append(model)
-
 
 	# Get familiarity category of the data from the user survey data
 	# The user's familiarity scores for each cuisine (score: between 0-1) [[0.3, 0.3, 0.5, ], [], [] ... ]
@@ -286,55 +278,29 @@ if __name__ == "__main__":
 		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
 			[str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))
 
-	# Input the surprise recipes
-	if args.surprise_recipes != None:
-		surprise_recipe_reader = preprocessor.Recipe_Reader(args.surprise_recipes, "Title and Ingredients", "ID", famcat_column="cuisine")
-		surprise_recipe_reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
-		print(surprise_recipe_reader.documents)
-		print(surprise_recipe_reader.doc_raws)
-		print(surprise_recipe_reader.all_keys_to_per_fc_keys)
-		print(surprise_recipe_reader.per_fc_keys_to_all_keys)
-		print(surprise_recipe_reader.docs_per_fc)
-		print(surprise_recipe_reader.doc_famcats)
-		print(surprise_recipe_reader.dictionary)
-		print(surprise_recipe_reader.famcat_column)
-		print(surprise_recipe_reader.famcats)
-	else:
-		print 'No surprise recipes provided, so will use the input recipes which the model was built on\nThis will take a long time.'
-		surprise_recipe_reader = reader
-
 	# Evaluate personalized surprise model
-	# Repeat for each user
 	print 'Number of users:', len(users_fam)
+	# Initialize the user surprise estimates
 	user_suprise_estimates = {}
+	# Repeat for each user
 	for user_idx, user_fam_cat in enumerate(users_fam):
 		print "User's familiarity", user_idx, user_fam_cat
+		# Store the fam cat into the dict
 		user_suprise_estimates['user_' + str(user_idx)] = {'user_fam_cat': user_fam_cat}
-		# dataset_surps = eval_personalised_dataset_surprise(models, reader, user_fam_cat)
-		dataset_surps = eval_personalised_dataset_surprise(models, surprise_recipe_reader, user_fam_cat)
+		# Store the surprises; there are two ways to evaluate the surprise recipes
+		# dataset_surps = eval_personalised_dataset_surprise(models, surprise_recipe_reader, user_fam_cat)
+		dataset_surps = eval_personalised_dataset_surprise(models, reader, user_fam_cat, offset=73106)
 		dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 		unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
+		# For the top 10 surprising receipes, store their recipe ID, surprise, raw doc and surprise cuisine scores
 		for doc in dataset_surps[:10]:
 			pp.pprint(doc)
-			# print doc["id"]+": (no titles currently)"#, doc["title"]
-			# print "  ** 95th percentile surprise:",doc["surprise"]
-			# print "  ** Document text:",doc["raw"]
-			# print "  ** Surprising pairs (personalised):",doc["surprises"]
-			# print 'user_' + str(user_idx), user_fam_cat, doc["id"], doc["surprise"], doc["raw"], doc["surprises"]
 			user_suprise_estimates['user_' + str(user_idx)]['recipe_id'] = doc['id']
 			user_suprise_estimates['user_' + str(user_idx)]['95th_percentile'] = doc['surprise']
 			user_suprise_estimates['user_' + str(user_idx)]['ingredients'] = doc['raw']
 			user_suprise_estimates['user_' + str(user_idx)]['surprise_cuisine'] = []
 			for surprise_combination in doc['surprises']:
 				user_suprise_estimates['user_' + str(user_idx)]['surprise_cuisine'].append(surprise_combination)
-			#if len(doc["surprises"]):
-			#	# most_similar = most_similar_differences(doc["surprises"][0],unique_surps, model, reader.dictionary)
-			#	most_similar = most_similar_differences_personal(doc["surprises"][0],unique_surps, models, reader.dictionary)
-			#	print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
-			#	for pair in most_similar:
-			#		print "    ** ",pair[4],":",pair[1]
-	# print 'user_suprise_estimates', user_suprise_estimates
+	# Store the user_suprise_estimates in a JSON and pickle
 	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/new/user_suprise_estimates.pickle'
 	pickle.dump(user_suprise_estimates, open(user_suprise_estimates_pickle_fn, 'wb'))
-	user_suprise_estimates_json_fn = cwd + 'GloVex/results/new/user_suprise_estimates.json'
-	json.dump(user_suprise_estimates, open(user_suprise_estimates_json_fn, 'w'))

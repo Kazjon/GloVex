@@ -1,4 +1,4 @@
-import argparse, logging, scipy, itertools, sys, multiprocessing
+import argparse, logging, scipy.spatial, itertools, sys, multiprocessing
 
 import preprocessor
 

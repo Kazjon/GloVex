@@ -1,4 +1,4 @@
-import os, argparse, logging, scipy, itertools, random, sys, numpy as np, pandas as pd, pprint, pickle, json
+import os, argparse, logging, scipy.spatial, itertools, sys, numpy as np, pandas as pd, pprint, pickle, json, collections
 pp = pprint.PrettyPrinter(indent=4)
 
 import preprocessor, evaluate
@@ -274,16 +274,38 @@ if __name__ == "__main__":
 
 	# Load/train personalised models
 	models = []
+	model_famcat = dict()
 	for fc in reader.famcats:
 		model = preprocessor.glovex_model(args.inputfile, reader.argstring+"_fc"+str(fc), reader.cooccurrence[fc],
 										  args.dims, args.glove_alpha, args.glove_x_max,args.overwrite_model,
 										  use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values if args.use_sglove else None)
-		if np.sum(model.gradsqb)/len(model.gradsqb) == 1: # Nothing in the model object says how many epochs it's been trained for.  However, if the bias nodes are all 1, it's untrained
+		if np.sum(model.gradsqb)/len(model.gradsqb) == 1:
+			# Nothing in the model object says how many epochs it's been trained for. However, if the bias nodes are all 1, it's untrained
 			logger.info(" ** Training created "+fc+" model.")
 			preprocessor.train_glovex(model, reader, args, famcat=fc)
 		else:
 			logger.info(" ** Loaded GloVe model for "+fc+".")
+		# Store the mode in an array
 		models.append(model)
+		# Store the model in a dict
+		model_famcat[fc] = model
+
+	# Get all of the surprises for all of the combinations
+	top_surps = []
+	all_comb_surps_per_cuisine = collections.defaultdict(dict)
+	for famcat in model_famcat:
+		print('Store all surprise combinations for', famcat)
+		all_comb_suprs = preprocessor.save_surps(model_famcat[famcat], reader, famcat=famcat)
+		# pp.pprint(all_comb_suprs)
+		for each_comb in all_comb_suprs:
+			# print(str(each_comb))
+			all_comb_surps_per_cuisine[frozenset(each_comb)][famcat] = all_comb_suprs[each_comb]
+		# print(all_comb_surps_per_cuisine)
+	print('Number of combinations in all_comb_surps_per_cuisine:', len(all_comb_surps_per_cuisine))
+	# print(all_comb_surps_per_cuisine)
+	# # Store all of the combination surprises in a JSON format
+	# all_comb_suprs_fn = cwd + '/GloVex/results/new/all_comb_surps_per_cuisine.json'
+	# json.dump(all_comb_surps_per_cuisine, open(all_comb_suprs_fn, 'w'))
 
 	# Get familiarity category of the data from the user survey data
 	# The user's familiarity scores for each cuisine (score: between 0-1) [[0.3, 0.3, 0.5, ], [], [] ... ]
@@ -292,14 +314,10 @@ if __name__ == "__main__":
 		users_fam = survey_reader(args.user_survey)
 	else:
 		print 'There is no user data, an assumed user will be modeled instead'
-		# user = [random.random() for fc in reader.famcats]
-
-		#users_fam = [[0.5, 0.6, 0.8, 0.6, 0.3, 0.7, 0.5]]
-		#users_fam = [[1., 1., 1., 1., 1., 1., 1.]]
 		users_fam = [
 			[0.5, 0.6, 0.8, 0.6, 0.3, 0.7, 0.5],
 			[0.4, 0.3, 0.2, 0.8, 0.6, 0.7, 0.2]
-					 ]
+		]
 		print 'users_fam', users_fam
 		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
 			[str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))
@@ -308,6 +326,8 @@ if __name__ == "__main__":
 	print 'Number of users:', len(users_fam)
 	# Initialize the user surprise estimates
 	user_suprise_estimates = {}
+	all_comb_surps_per_user = collections.defaultdict(dict)
+	print('Store all_comb_surps_per_user:')
 	# Repeat for each user
 	for user_idx, user_fam_cat in enumerate(users_fam):
 		print "User's familiarity", user_idx, user_fam_cat
@@ -317,16 +337,55 @@ if __name__ == "__main__":
 		# dataset_surps = eval_personalised_dataset_surprise(models, surprise_recipe_reader, user_fam_cat)
 		dataset_surps = eval_personalised_dataset_surprise(models, reader, user_fam_cat, offset=73106)
 		dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
+		# Get the unique set of surprises for this user
 		unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
+		# print(unique_surps)
+		# Iterate over the unique surps to store in all_comb_surps_per_user
+		for each_comb in unique_surps:
+			# print(str((each_comb[0], each_comb[1])))
+			# Store the combined the surprise scores of all cuisines (double keys: primary: ingredient combinations, secondary: user ID)
+			all_comb_surps_per_user[frozenset((each_comb[0], each_comb[1]))]['user_' + str(user_idx)] = each_comb[2]
+		# print(all_comb_surps_per_user)
 		# For the top 10 surprising receipes, store their recipe ID, surprise, raw doc and surprise cuisine scores
 		for doc in dataset_surps[:10]:
-			pp.pprint(doc)
+			# pp.pprint(doc)
 			user_suprise_estimates['user_' + str(user_idx)]['recipe_id'] = doc['id']
 			user_suprise_estimates['user_' + str(user_idx)]['95th_percentile'] = doc['surprise']
 			user_suprise_estimates['user_' + str(user_idx)]['ingredients'] = doc['raw']
 			user_suprise_estimates['user_' + str(user_idx)]['surprise_cuisine'] = []
 			for surprise_combination in doc['surprises']:
 				user_suprise_estimates['user_' + str(user_idx)]['surprise_cuisine'].append(surprise_combination)
-	# Store the user_suprise_estimates in a JSON and pickle
+	print('Number of combinations in all_comb_surps_per_user:',len(all_comb_surps_per_user))
+	# print(all_comb_surps_per_user)
+	# # Store the user_suprise_estimates in a JSON
+	# all_comb_surps_per_user_fn = cwd + '/GloVex/results/new/all_comb_surps_per_user.json'
+	# json.dump(all_comb_surps_per_user, open(all_comb_surps_per_user_fn, 'w'))
+	# Store the user_suprise_estimates in a pickle
 	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/new/user_suprise_estimates.pickle'
 	pickle.dump(user_suprise_estimates, open(user_suprise_estimates_pickle_fn, 'wb'))
+
+	# Test if all combinations are the same in both dicts
+	print('Number of combinations in all_comb_surps_per_cuisine:', len(all_comb_surps_per_cuisine))
+	print('Number of combinations in all_comb_surps_per_user:', len(all_comb_surps_per_user))
+	print('Are all keys in the two dicts equal?',
+		set(all_comb_surps_per_cuisine.keys()) == set(all_comb_surps_per_user.keys()))
+	combinations_instersection = \
+		set(all_comb_surps_per_cuisine.keys()).intersection(set(all_comb_surps_per_user.keys()))
+	print('Number of intersecting keys between all_comb_surps_per_cuisine and all_comb_surps_per_user',
+		len(combinations_instersection))
+	# Combine all_surp per cuisine and per user
+	all_comb_surps_dict = collections.defaultdict(dict)
+	for each_comb in combinations_instersection:
+		# print(each_comb)
+		all_comb_surps_dict[str(each_comb)]['per_cuisine'] = all_comb_surps_per_cuisine[each_comb]
+		all_comb_surps_dict[str(each_comb)]['per_user'] = all_comb_surps_per_user[each_comb]
+	# Store the all_comb_surps_dict in a JSON
+	all_comb_surps_fn = cwd + '/GloVex/results/new/all_comb_surps.json'
+	json.dump(all_comb_surps_dict, open(all_comb_surps_fn, 'w'))
+
+"""
+('Number of combinations in all_comb_surps_per_cuisine:', 39821)
+('Number of combinations in all_comb_surps_per_user:', 471)
+('Are all keys in the two dicts equal?', False)
+('Number of intersecting keys between all_comb_surps_per_cuisine and all_comb_surps_per_user', 438)
+"""

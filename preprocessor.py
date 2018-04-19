@@ -385,37 +385,18 @@ def save_model(model,path,args,suffix=".glovex"):
 	with open(path+args+suffix,"wb") as f:
 		pickle.dump(model,f)
 
-def train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, batch_size=100, step_size_decay=25, famcat=None):
-	# Train the GloVe model
-	if famcat == None:
-		logger.info(" ** Training GloVe")
-		for epoch in range(args.epochs):
-			err = model.train(workers=cores, batch_size=batch_size, step_size=args.learning_rate/(1.0+epoch/args.learning_rate_decay))
-			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
-			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
-				top_n = 50
-				print_top_n_surps(model, reader, top_n)
-				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
-	else:
-		logger.info(" ** Training GloVe for " + famcat)
-		for epoch in range(args.epochs):
-			err = model.train(workers=cores, batch_size=batch_size, step_size=args.learning_rate/(1.0+epoch/args.learning_rate_decay))
-			logger.info("   **** Training GloVe for " + famcat + ": epoch %d, error %.5f" % (epoch, err))
-			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
-				top_n = 50
-				print_top_n_surps(model, reader, top_n, famcat=famcat)
-				save_model(model, args.inputfile, reader.argstring + "_epochs" + str(epoch))
-
 def train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, batch_size=1000, step_size_decay=25, famcat=None):
+	# For batch_size the higher the better, subject to RAM or precision errors.
+	# 1000 is faster but on a few occasions we were getting NaN results or out-of-memory errors, so we gotta be careful
 	# Train the GloVe model
-	if famcat == None:
+	if famcat is None:
 		logger.info(" ** Training GloVe")
 		for epoch in range(args.epochs):
 			err = model.train(workers=cores, batch_size=batch_size, step_size=args.learning_rate/(1.0+epoch/args.learning_rate_decay))
 			logger.info("   **** Training GloVe: epoch %d, error %.5f" % (epoch, err))
 			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
 				top_n = 50
-				print_top_n_surps(model, reader, top_n)
+				print_top_n_surps(model, reader, top_n=top_n)
 				save_model(model, args.inputfile, reader.argstring+"_epochs"+str(epoch))
 	else:
 		logger.info(" ** Training GloVe for " + famcat)
@@ -424,12 +405,11 @@ def train_glovex(model, reader, args, cores=multiprocessing.cpu_count() - 1, bat
 			logger.info("   **** Training GloVe for " + famcat + ": epoch %d, error %.5f" % (epoch, err))
 			if epoch and (epoch % args.print_surprise_every == 0 or epoch == args.epochs - 1):
 				top_n = 50
-				print_top_n_surps(model, reader, top_n, famcat=famcat)
+				print_top_n_surps(model, reader, top_n=top_n, famcat=famcat)
 				save_model(model, args.inputfile, reader.argstring + "_epochs" + str(epoch))
 
-
-# Print top n surprise scores function
-def print_top_n_surps(model, reader, top_n, famcat=None):
+# Get top n surprise scores function
+def get_top_n_surps(model, reader, top_n=None, famcat=None):
 	top_surps = []
 	if famcat is None:
 		for doc in reader.documents:
@@ -437,18 +417,23 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 				top_surps += evaluate.estimate_document_surprise_pairs(doc, model, reader.cooccurrence,
 																		   reader.word_occurrence, reader.dictionary,
 																		   reader.documents,
-																		   use_sglove=reader.use_sglove)[:10]
+																		   use_sglove=reader.use_sglove)
 				top_surps = list(set(top_surps))
 				top_surps.sort(key=lambda x: x[2], reverse=True)
 				top_surps = top_surps[:top_n]
 	else:
 		for doc,fcs in zip(reader.documents, reader.doc_famcats):
 			if len(doc) and famcat in fcs:
-				top_surps += evaluate_personalised.estimate_personalised_document_surprise_pairs_one_fc(doc, model, famcat, reader)[:10]
+				top_surps += evaluate_personalised.estimate_personalised_document_surprise_pairs_one_fc(doc, model, famcat, reader)
 				top_surps = list(set(top_surps))
 				top_surps.sort(key = lambda x: x[2], reverse=True)
 				top_surps = top_surps[:top_n]
+	return top_surps
 
+# Print top n surprise scores function
+def print_top_n_surps(model, reader, top_n, famcat=None):
+	# Get top N surprises
+	top_surps = get_top_n_surps(model, reader, top_n=top_n, famcat=famcat)
 	print "top_n surprising combos"
 	w1s = []
 	w2s = []
@@ -489,7 +474,6 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 				w1_w2_cooccurrence = reader.cooccurrence[famcat][fc_wk1][fc_wk2]
 			except KeyError:
 				w1_w2_cooccurrence = 0
-
 			obs_coocs.append(w1_w2_cooccurrence)
 			obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, reader.docs_per_fc[famcat])
 			obs_surps.append(obs_surp)
@@ -506,6 +490,42 @@ def print_top_n_surps(model, reader, top_n, famcat=None):
 	tab.float_format = ".4"
 	print tab
 
+# Print top n surprise scores function
+def save_surps(model, reader, famcat=None):
+	# Get all surprises
+	top_surps = get_top_n_surps(model, reader, top_n=None, famcat=famcat)
+	# Create a dict to hold all of the surprise combinations
+	all_comb_suprs = {}
+	for surp in top_surps:
+		w1s = surp[0]
+		w2s = surp[1]
+		est_surps = surp[2]
+		all_comb_suprs[w1s, w2s] = {'est_surp': est_surps}
+		if famcat is None:
+			w1_occ = reader.word_occurrence[surp[0]]
+			w2_occ = reader.word_occurrence[surp[1]]
+			wk1 = reader.dictionary.token2id[surp[0]]
+			wk2 = reader.dictionary.token2id[surp[1]]
+			est_coocs = evaluate.estimate_word_pair_cooccurrence(wk1, wk2, model, reader.cooccurrence)
+			w1_w2_cooccurrence = reader.cooccurrence[wk1][wk2]
+			obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, len(reader.documents))
+		else:
+			w1_occ = reader.word_occurrence[famcat][surp[0]]
+			w2_occ = reader.word_occurrence[famcat][surp[1]]
+			fc_wk1 = reader.all_keys_to_per_fc_keys[famcat][reader.dictionary.token2id[surp[0]]]
+			fc_wk2 = reader.all_keys_to_per_fc_keys[famcat][reader.dictionary.token2id[surp[1]]]
+			est_coocs = evaluate_personalised.estimate_word_pair_cooccurrence(fc_wk1, fc_wk2, model, reader.cooccurrence[famcat])
+			try:
+				w1_w2_cooccurrence = reader.cooccurrence[famcat][fc_wk1][fc_wk2]
+			except KeyError:
+				w1_w2_cooccurrence = 0
+			obs_surp = evaluate.word_pair_surprise(w1_w2_cooccurrence, w1_occ, w2_occ, reader.docs_per_fc[famcat])
+		all_comb_suprs[w1s, w2s]['w1_occ'] = w1_occ
+		all_comb_suprs[w1s, w2s]['w2_occ'] = w2_occ
+		all_comb_suprs[w1s, w2s]['est_coocs'] = est_coocs
+		all_comb_suprs[w1s, w2s]['obs_cooc'] = w1_w2_cooccurrence
+		all_comb_suprs[w1s, w2s]['obs_surp'] = obs_surp
+	return all_comb_suprs
 
 # Main function
 if __name__ == "__main__":
@@ -554,7 +574,6 @@ if __name__ == "__main__":
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
 
-
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing, export_dictionary=args.export_dictionary)
 
@@ -566,7 +585,6 @@ if __name__ == "__main__":
 		if args.export_vectors:
 			reader.export_vectors(model)
 
-
 	# If the familiarity categories will be imported
 	else:
 		for fc, fc_cooccurrence in reader.cooccurrence.iteritems():
@@ -575,5 +593,3 @@ if __name__ == "__main__":
 								 args.overwrite_model, use_sglove=args.use_sglove, p_values=reader.cooccurrence_p_values[fc] if args.use_sglove else None)
 
 			train_glovex(model, reader, args, famcat = fc)
-
-

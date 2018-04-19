@@ -96,3 +96,6 @@ Icon
 
 # Results: we don't want to overload the repo with files about the results, since they can be shared on google drive
 results/
+
+# Environment pipenv
+Pipfile*

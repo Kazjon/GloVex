@@ -1,4 +1,5 @@
-import argparse, logging, scipy.spatial, itertools, sys, multiprocessing
+import os, argparse, logging, scipy.spatial, itertools, sys, pprint, pickle, multiprocessing
+pp = pprint.PrettyPrinter(indent=4)
 
 import preprocessor
 
@@ -7,12 +8,13 @@ import numpy as np
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("glovex")
 
-def eval_dataset_surprise(model, reader, top_n_per_doc = 0, log_every=1000, ignore_order=True):
+def eval_dataset_surprise(model, reader, top_n_per_doc = 0, log_every=1000, ignore_order=True, offset=0):
 	logger.info("  ** Evaluating dataset.")
 	dataset_surps = []
 	count = 0
 	# for id,title,doc,raw_doc in zip(reader.doc_ids, reader.doc_titles, reader.documents, reader.doc_raws):
-	for id, doc, raw_doc in zip(reader.doc_ids, reader.documents, reader.doc_raws):
+	# for id, doc, raw_doc in zip(reader.doc_ids, reader.documents, reader.doc_raws):
+	for id, doc, raw_doc in zip(reader.doc_ids[offset:], reader.documents[offset:], reader.doc_raws[offset:]):
 		if count and count % log_every == 0:
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
@@ -137,6 +139,8 @@ def most_similar_differences(surp, surp_list, model, dictionary, n = 10):
 	return results
 
 if __name__ == "__main__":
+	# Get the current dir's path
+	cwd = os.getcwd()
 	# Parse arguments from the command
 	parser = argparse.ArgumentParser(description="Evaluate a dataset using a trained GloVex model.")
 	parser.add_argument("inputfile", help='The input file path to work with (omit the args and suffix)')
@@ -189,24 +193,33 @@ if __name__ == "__main__":
 	else:
 		logger.info(" ** Loaded GloVe model.")
 
-
 	if args.export_vectors:
 		reader.export_vectors(model)
 
-	# Evaluate it
-	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)
+	# Evaluate the model and print/store the surprise scores of the surprise recipes in the survey
+	# dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)
+	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25, offset=73106)
 	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
 	print 'dataset_surps', len(dataset_surps)
-	for doc in dataset_surps[:10]:
-		# print doc["id"]+":", doc["title"]
-		print doc["id"]+":"
-		print "  ** 95th percentile surprise:",doc["surprise"]
-		print "  ** Abstract:",doc["raw"]
-		print "  ** Surprising pairs:",doc["surprises"]
-		if len(doc["surprises"]):
-			most_similar = most_similar_differences(doc["surprises"][0],unique_surps,model, reader.dictionary)
-			print "  ** Most similar to top surprise:("+str(doc["surprises"][0])+")"
-			for pair in most_similar:
-				print "    ** ", pair[4], ":", pair[1]
-print
+	# Initialize the oracle surprise estimates
+	oracle_suprise_estimates = {}
+	recipe_surp_dict = {}
+	# for doc in dataset_surps[:10]:
+	for doc in dataset_surps:
+		# pp.pprint(doc)
+		# recipe_surp_dict['recipe_id'] = doc['id']
+		recipe_surp_dict['95th_percentile'] = doc['surprise']
+		recipe_surp_dict['ingredients'] = doc['raw']
+		recipe_surp_dict['surprise_cuisine'] = []
+		for surprise_combination in doc['surprises']:
+			recipe_surp_dict['surprise_cuisine'].append(surprise_combination)
+		# Append the recipe_surp_dict to the user_suprise_estimates
+		oracle_suprise_estimates[doc['id']] = recipe_surp_dict
+		# Renew/empty the dict for next iteration
+		recipe_surp_dict = {}
+	# print 'oracle_suprise_estimates', oracle_suprise_estimates
+	pp.pprint(oracle_suprise_estimates)
+	# Store the user_suprise_estimates in a pickle
+	oracle_suprise_estimates_fn = cwd + '/GloVex/results/new/oracle_suprise_estimates.pickle'
+	pickle.dump(oracle_suprise_estimates, open(oracle_suprise_estimates_fn, 'wb'))

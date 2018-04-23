@@ -238,6 +238,7 @@ def survey_reader(qchef_surveydata_fn):
 	return user_fam_scaled_arr.tolist(), users_surp_ratings_arr
 
 if __name__ == "__main__":
+	# Get the current dir's path
 	cwd = os.getcwd()
 	# Parse arguments from the command
 	parser = argparse.ArgumentParser(description="Evaluate a dataset using a trained GloVex model.")
@@ -355,16 +356,16 @@ if __name__ == "__main__":
 			# Store the combined the surprise scores of all cuisines (double keys: primary: ingredient combinations, secondary: user ID)
 			all_comb_surps_per_user[frozenset((each_comb[0], each_comb[1]))]['user_' + str(user_idx)] = each_comb[2]
 		# print(all_comb_surps_per_user)
-		# For the top 10 surprising receipes, store their recipe ID, surprise, raw doc and surprise cuisine scores
+		# For the surprising receipes, store their recipe ID, surprise, raw doc and surprise cuisine scores
 		recipe_surp_dict = {}
-		for doc in dataset_surps[:10]:
+		# for doc in dataset_surps[:10]:
+		for doc in dataset_surps:
 			# pp.pprint(doc)
 			recipe_surp_dict['recipe_id'] = doc['id']
 			recipe_surp_dict['95th_percentile'] = doc['surprise']
 			recipe_surp_dict['ingredients'] = doc['raw']
 			recipe_surp_dict['surprise_cuisine'] = []
 			for surprise_combination in doc['surprises']:
-				# user_suprise_estimates['user_' + str(user_idx)]['surprise_cuisine'].append(surprise_combination)
 				recipe_surp_dict['surprise_cuisine'].append(surprise_combination)
 			# Append the recipe_surp_dict to the user_suprise_estimates
 			user_suprise_estimates['user_' + str(user_idx)]['recipes_surp'].append(recipe_surp_dict)

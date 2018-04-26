@@ -110,11 +110,15 @@ class DocReader(object):
 			for wk1, w1 in self.dictionary.id2token.iteritems():
 				for wk2, w2 in self.dictionary.id2token.iteritems():
 					if wk1 != wk2:
-						surpmat[wk1,wk2] = evaluate.word_pair_surprise(self.cooccurrence[wk1][wk2], self.word_occurrence[w1], self.word_occurrence[w2], self.n_docs)
+						try:
+							cooc = self.cooccurrence[wk1][wk2]
+						except KeyError:
+							cooc = 0
+						surpmat[wk1,wk2] = evaluate.word_pair_surprise(cooc, self.word_occurrence[w1], self.word_occurrence[w2], len(self.doc_ids))
 			writer.writerows(list(surpmat))
 		logger.info("   **** Observed surprise exported.")
 
-	def export_surprise(self, model):
+	def export_estimated_surprise(self, model, use_sglove=False):
 		if self.use_famcats:
 			raise NotImplementedError
 		with open(self.filepath + self.argstring + "_estimated_surprise.csv", "wb") as ef:
@@ -123,7 +127,7 @@ class DocReader(object):
 			for wk1, w1 in self.dictionary.id2token.iteritems():
 				for wk2, w2 in self.dictionary.id2token.iteritems():
 					if wk1 != wk2:
-						surpmat[wk1,wk2] = evaluate.word_pair_surprise(evaluate.estimate_word_pair_cooccurrence(wk1,wk2,model, self.cooccurrence), self.word_occurrence[w1], self.word_occurrence[w2], self.n_docs)
+						surpmat[wk1,wk2] = evaluate.word_pair_surprise(evaluate.estimate_word_pair_cooccurrence(wk1,wk2,model, self.cooccurrence, use_sglove=use_sglove), self.word_occurrence[w1], self.word_occurrence[w2], len(self.doc_ids))
 			writer.writerows(list(surpmat))
 		logger.info("   **** Estimated surprise exported.")
 

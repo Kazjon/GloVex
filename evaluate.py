@@ -59,12 +59,16 @@ def extract_document_cooccurrence_matrix(doc, coocurrence):
 def estimate_word_pair_cooccurrence(wk1, wk2, model, cooccurrence, use_sglove = False):
 	# take dot product of vectors
 	cooc = np.dot(model.W[wk1],model.ContextW[wk2]) + model.b[wk1] + model.ContextB[wk2]
+	try:
+		obs_cooc = cooccurrence[wk1][wk2]
+	except KeyError:
+		obs_cooc = 0
 	if use_sglove:
 		# correct for the significantly-less-than-unconditional-likelihood scaling in s_glove
 		cooc = cooc #Not currently scaling these in any way
-	elif cooccurrence[wk1][wk2] < model.x_max:
+	elif obs_cooc < model.x_max:
 		# correct for the rare feature scaling described in https://nlp.stanford.edu/pubs/glove.pdf
-		cooc *= 1.0/pow(cooccurrence[wk1][wk2] / model.x_max,model.alpha)
+		cooc *= 1.0/pow(obs_cooc / model.x_max,model.alpha)
 	return cooc[0]
 
 def estimate_document_cooccurrence_matrix(doc, model, cooccurrence, use_sglove = False):
@@ -166,6 +170,8 @@ if __name__ == "__main__":
 						help="Whether to export a CSV containing a features*features matrix of estimated surprises.")
 	parser.add_argument("--export_observed_surprise", action="store_true",
 						help="Whether to export a CSV containing a features*features matrix of actually observed surprises.")
+	parser.add_argument("--export_dictionary", action="store_true",
+						help="Whether to export a CSV containing all the features in the vocabulary after preprocessing.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
@@ -180,7 +186,7 @@ if __name__ == "__main__":
 		sys.exit()
 
 	# Preprocess the data
-	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
+	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing, export_dictionary=args.export_dictionary)
 
 	# Construct the glovex_model
 	model = preprocessor.glovex_model(args.inputfile, reader.argstring, reader.cooccurrence, args.dims, args.glove_alpha,
@@ -199,7 +205,7 @@ if __name__ == "__main__":
 	if args.export_observed_surprise:
 		reader.export_observed_surprise()
 	if args.export_estimated_surprise:
-		reader.export_estimated_surprise(model)
+		reader.export_estimated_surprise(model, use_sglove=args.use_sglove)
 
 	# Evaluate it
 	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)

@@ -313,14 +313,11 @@ if __name__ == "__main__":
 		# print(all_comb_surps_per_cuisine)
 	print('Number of combinations in all_comb_surps_per_cuisine:', len(all_comb_surps_per_cuisine))
 	# print(all_comb_surps_per_cuisine)
-	# # Store all of the combination surprises in a JSON format
-	# all_comb_suprs_fn = cwd + '/GloVex/results/new/all_comb_surps_per_cuisine.json'
-	# json.dump(all_comb_surps_per_cuisine, open(all_comb_suprs_fn, 'w'), indent=4)
 
 	# Get familiarity category of the data from the user survey data
 	# The user's familiarity scores for each cuisine (score: between 0-1) [[0.3, 0.3, 0.5, ], [], [] ... ]
 	# Order of cuisines[mexican, chinese, modern, greek, indian, thai, italian]
-	if args.user_survey != None:
+	if not args.user_survey is None:
 		users_fam, users_surp_ratings_arr = survey_reader(args.user_survey)
 	else:
 		print 'There is no user data, an assumed user will be modeled instead'
@@ -373,9 +370,7 @@ if __name__ == "__main__":
 			recipe_surp_dict = {}
 	print('Number of combinations in all_comb_surps_per_user:',len(all_comb_surps_per_user))
 	# print(all_comb_surps_per_user)
-	# # Store the user_suprise_estimates in a JSON
-	# all_comb_surps_per_user_fn = cwd + '/GloVex/results/new/all_comb_surps_per_user.json'
-	# json.dump(all_comb_surps_per_user, open(all_comb_surps_per_user_fn, 'w'), indent=4)
+
 	# Store the user_suprise_estimates in a pickle
 	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/new/user_suprise_estimates.pickle'
 	pickle.dump(user_suprise_estimates, open(user_suprise_estimates_pickle_fn, 'wb'))
@@ -404,16 +399,3 @@ if __name__ == "__main__":
 	# Store the all_comb_surps_dict in a JSON
 	all_comb_surps_fn = cwd + '/GloVex/results/new/all_comb_surps.json'
 	json.dump(all_comb_surps_dict, open(all_comb_surps_fn, 'w'), indent=4)
-
-"""
-('Number of combinations in all_comb_surps_per_cuisine:', 39821)
-('Number of combinations in all_comb_surps_per_user:', 471)
-('Are all keys in the two dicts equal?', False)
-('Number of intersecting keys between all_comb_surps_per_cuisine and all_comb_surps_per_user', 438)
-
-('Number of combinations in all_comb_surps_per_user:', 471)
-('Number of combinations in all_comb_surps_per_cuisine:', 74881)
-('Number of combinations in all_comb_surps_per_user:', 471)
-('Are all keys in the two dicts equal?', False)
-('Number of intersecting keys between all_comb_surps_per_cuisine and all_comb_surps_per_user', 471)
-"""

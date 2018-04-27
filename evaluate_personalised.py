@@ -343,7 +343,6 @@ if __name__ == "__main__":
 		# Store the surprises; there are two ways to evaluate the surprise recipes
 		# dataset_surps = eval_personalised_dataset_surprise(models, surprise_recipe_reader, user_fam_cat)
 		dataset_surps = eval_personalised_dataset_surprise(models, reader, user_fam_cat, offset=73106)
-		dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 		# Get the unique set of surprises for this user
 		unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
 		# print(unique_surps)

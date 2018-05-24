@@ -212,8 +212,11 @@ def survey_reader(qchef_surveydata_fn):
 	# Filter out the users who mentioned in their comments that it's the second time
 	first_timer_df = first_timer_df[(condition1 | condition2) & (condition3 | condition4)]
 	# print first_timer_df['comments_1'].unique()
+	# ====================
+	# Get the familiarity scores
 	# How Much Do You Know About These Foods?
-	# hab_11_01: American, hab_11_02: Chinese, hab_11_03: Mexican, hab_11_04: Italian, hab_11_05: Japanese, hab_11_06: Greek, hab_11_07: French, hab_11_08: Thai, hab_11_09: Spanish, hab_11_10: Indian, hab_11_11: Mediterranean
+	# hab_11_01: American, hab_11_02: Chinese, hab_11_03: Mexican, hab_11_04: Italian, hab_11_05: Japanese, hab_11_06: Greek,
+	# hab_11_07: French, hab_11_08: Thai, hab_11_09: Spanish, hab_11_10: Indian, hab_11_11: Mediterranean
 	fam_cols = ['hab_11_01', 'hab_11_02', 'hab_11_03', 'hab_11_04', 'hab_11_05', 'hab_11_06', 'hab_11_07', 'hab_11_08',
 				'hab_11_09', 'hab_11_10', 'hab_11_11']
 	# To-do: Modern is either American or the average of all of the cuisines
@@ -222,20 +225,25 @@ def survey_reader(qchef_surveydata_fn):
 	# Reorder cuisines as following to match the reader.famcat: mexican, chinese, greek, indian, thai, italian
 	cuisine_cols = ['hab_11_03', 'hab_11_02', 'hab_11_01', 'hab_11_06', 'hab_11_10', 'hab_11_08', 'hab_11_04']
 	user_fam_df = user_fam_df[cuisine_cols]
-	# Get list of lists of users' familiarity rarings
-	user_fam_score_arr = user_fam_df.values.tolist()
-	# Scale the ratings to range between 0-1
-	user_fam_scaled_arr = np.array(user_fam_score_arr) / 5.0
+	# Get list of familiarity and normalize the scores by 5
+	user_fam_df['fam_list'] = (np.array(user_fam_df.values.tolist()) / 5.0).tolist()
+	# Create a dict with the keys as the index and the values as the normalized familiarity list
+	user_fam_dict = pd.Series(user_fam_df['fam_list'].values, index = user_fam_df.index).to_dict()
+	# =======================
 	# Get the surprise scores
 	# Get columns that ask about surprise
 	surp_cols = []
 	for each_col in first_timer_df.columns:
 		if 'surp_' in each_col and int(re.search(r'\d+', each_col).group()) % 2 != 0:
 			surp_cols.append(each_col)
-	# Get the list of lists
-	users_surp_ratings_arr = first_timer_df[surp_cols].values.tolist()
+	# Put the surprise scores in a DF
+	users_surp_ratings_df = first_timer_df[surp_cols]
+	# Get the surprise list and put in a column
+	users_surp_ratings_df['surp_list'] = users_surp_ratings_df.values.tolist()
+	# Create a dict with the keys as the index and the values as the surprise ratings
+	users_surp_ratings_dict = pd.Series(users_surp_ratings_df['surp_list'].values, index = users_surp_ratings_df.index).to_dict()
 	# Return as a list instead of a numpy array
-	return user_fam_scaled_arr.tolist(), users_surp_ratings_arr
+	return user_fam_dict, users_surp_ratings_dict
 
 if __name__ == "__main__":
 	# Get the current dir's path
@@ -318,28 +326,36 @@ if __name__ == "__main__":
 	# The user's familiarity scores for each cuisine (score: between 0-1) [[0.3, 0.3, 0.5, ], [], [] ... ]
 	# Order of cuisines[mexican, chinese, modern, greek, indian, thai, italian]
 	if not args.user_survey is None:
-		users_fam, users_surp_ratings_arr = survey_reader(args.user_survey)
+		# users_fam, users_surp_ratings_arr = survey_reader(args.user_survey)
+		user_fam_dict, users_surp_ratings_dict = survey_reader(args.user_survey)
 	else:
 		print 'There is no user data, an assumed user will be modeled instead'
-		users_fam = [
+		# users_fam = [
+		user_fam_dict = [
 			[0.5, 0.6, 0.8, 0.6, 0.3, 0.7, 0.5],
 			[0.4, 0.3, 0.2, 0.8, 0.6, 0.7, 0.2]
 		]
-		print 'users_fam', users_fam
+		# print 'users_fam', users_fam
+		print 'users_fam', user_fam_dict
 		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
-			[str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))
+			# [str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))
+			[str(fc) + ": " + str(f) for f, fc in zip(user_fam_dict[0], reader.famcats)]))
 
 	# Evaluate personalized surprise model
-	print 'Number of users:', len(users_fam)
+	# print 'Number of users:', len(users_fam)
+	print 'Number of users:', len(user_fam_dict)
 	# Initialize the user surprise estimates
 	user_suprise_estimates = {}
 	all_comb_surps_per_user = collections.defaultdict(dict)
 	print('Store all_comb_surps_per_user:')
 	# Repeat for each user
-	for user_idx, user_fam_cat in enumerate(users_fam):
+	# for user_idx, user_fam_cat in enumerate(users_fam):
+	for user_idx in user_fam_dict:
+		user_fam_cat = user_fam_dict[user_idx]
 		print "User's familiarity", user_idx, user_fam_cat
 		# Store the fam cat into the dict
-		user_suprise_estimates['user_' + str(user_idx)] = {'user_fam_cat': user_fam_cat, 'recipes_surp': []}
+		# user_suprise_estimates['user_' + str(user_idx)] = {'user_fam_cat': user_fam_cat, 'recipes_surp': []}
+		user_suprise_estimates[user_idx] = {'user_fam_cat': user_fam_cat, 'recipes_surp': []}
 		# Store the surprises; there are two ways to evaluate the surprise recipes
 		# dataset_surps = eval_personalised_dataset_surprise(models, surprise_recipe_reader, user_fam_cat)
 		dataset_surps = eval_personalised_dataset_surprise(models, reader, user_fam_cat, offset=73106)
@@ -350,7 +366,8 @@ if __name__ == "__main__":
 		for each_comb in unique_surps:
 			# print(str((each_comb[0], each_comb[1])))
 			# Store the combined the surprise scores of all cuisines (double keys: primary: ingredient combinations, secondary: user ID)
-			all_comb_surps_per_user[frozenset((each_comb[0], each_comb[1]))]['user_' + str(user_idx)] = each_comb[2]
+			# all_comb_surps_per_user[frozenset((each_comb[0], each_comb[1]))]['user_' + str(user_idx)] = each_comb[2]
+			all_comb_surps_per_user[frozenset((each_comb[0], each_comb[1]))][user_idx] = each_comb[2]
 		# print(all_comb_surps_per_user)
 		# For the surprising receipes, store their recipe ID, surprise, raw doc and surprise cuisine scores
 		recipe_surp_dict = {}
@@ -364,7 +381,8 @@ if __name__ == "__main__":
 			for surprise_combination in doc['surprises']:
 				recipe_surp_dict['surprise_cuisine'].append(surprise_combination)
 			# Append the recipe_surp_dict to the user_suprise_estimates
-			user_suprise_estimates['user_' + str(user_idx)]['recipes_surp'].append(recipe_surp_dict)
+			# user_suprise_estimates['user_' + str(user_idx)]['recipes_surp'].append(recipe_surp_dict)
+			user_suprise_estimates[user_idx]['recipes_surp'].append(recipe_surp_dict)
 			# Renew/empty the dict for next iteration
 			recipe_surp_dict = {}
 	print('Number of combinations in all_comb_surps_per_user:',len(all_comb_surps_per_user))

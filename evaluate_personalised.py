@@ -286,20 +286,16 @@ class survey_reader(object):
 		if not knowledge_col is None:
 			# Get cuisine name and its suffix
 			cuisine_name = knowledge_col.group(1).lower()
-			# print 'cuisine_name', cuisine_name
 			# Convert the column from a one string to a tuple
 			self.food_cuisine_survey_df[this_col] = self.food_cuisine_survey_df[this_col].apply(col_str2tuple)
 			# Iterate over the set of all possible values for each of the cuisine columns
 			for each_ingredient in frozenset().union(*self.food_cuisine_survey_df[this_col]):
 				# Make the column name as the cuisine name and the ingredient separated by an underscore
 				col_name = cuisine_name + '_knowledge_' + each_ingredient
-				# print 'col_name', col_name
 				# Append this name into an array
 				# Transform the names of the ingredients
 				self.food_cuisine_survey_df[col_name] = self.food_cuisine_survey_df.apply(lambda _: int(each_ingredient in _[this_col]), axis=1)
 				# Invert to the opposite for uncommon ingreidients of the cuisine to make it if unchosen then its corrent (1) and vise versa
-				# print 'familiarity_knowledge_map_list', familiarity_knowledge_map_list[cuisine_name]['uncommon']
-				# print 'each_ingredient', each_ingredient
 				if each_ingredient.lower() in self.familiarity_knowledge_map_list[cuisine_name]['uncommon']:
 					self.food_cuisine_survey_df[col_name] = (~self.food_cuisine_survey_df[col_name].astype(bool)).astype(int)
 	# end get_knowledge_fam
@@ -311,7 +307,6 @@ class survey_reader(object):
 		# Get the surprise list and put in a column
 		users_df[col_list_name] = (np.array(users_df.values.tolist()) / 5.0).tolist()
 		# Create a dict with the keys as the index and the values as the surprise ratings
-		# users_fam_dir_dict = pd.Series(users_df[col_list_name].values, index = users_df.index).to_dict()
 		return pd.Series(users_df[col_list_name].values, index=users_df.index).to_dict()
 	# end of create_users_input_dict
 
@@ -321,7 +316,6 @@ class survey_reader(object):
 		food_cuisine_survey_fn = food_cuisine_survey_fn + '.csv'
 		# Read the CSV file
 		self.food_cuisine_survey_df = pd.read_csv(food_cuisine_survey_fn)
-		print 'self.food_cuisine_survey_df', self.food_cuisine_survey_df
 		# Filter out users who didn't pay attention
 		attention_question = 'Select only the ingredient that is Broccoli'
 		self.food_cuisine_survey_df = self.food_cuisine_survey_df[self.food_cuisine_survey_df[attention_question] == 'Broccoli']
@@ -345,17 +339,25 @@ class survey_reader(object):
 			# Get knowledge column
 			self.get_knowledge_fam(knowledge_str, each_col)
 		# Get the column names for each of the user input set
-		familiar_cols = []
+		# familiar_cols = []
 		preference_cols = []
 		knowledge_cols = []
 		surprise_preference_cols = []
 		surprise_rating_cols = []
 		for each_col in self.food_cuisine_survey_df.columns:
-			if 'fam_dir' in each_col: familiar_cols.append(each_col)
+			# if 'fam_dir' in each_col: familiar_cols.append(each_col)
 			if 'cuisine_pref' in each_col: preference_cols.append(each_col)
 			if 'knowledge' in each_col: knowledge_cols.append(each_col)
 			if 'surprise_rating' in each_col: surprise_rating_cols.append(each_col)
 			if 'surprise_preference' in each_col: surprise_preference_cols.append(each_col)
+		# Fix this array as the columns for direct familiarity
+		familiar_cols = ['mexican_fam_dir', 'chinese_fam_dir', 'greek_fam_dir', 'indian_fam_dir', 'thai_fam_dir',
+						 'italian_fam_dir']
+		# Make the modern cuisine's direct familiarity the average of the familiarity of other cuisines
+		self.food_cuisine_survey_df['modern_fam_dir'] = self.food_cuisine_survey_df[familiar_cols].mean(axis=1)
+		# Fix this array as the columns for direct familiarity in this order
+		familiar_cols = ['mexican_fam_dir', 'chinese_fam_dir', 'modern_fam_dir', 'greek_fam_dir', 'indian_fam_dir',
+						 'thai_fam_dir', 'italian_fam_dir']
 		# Create dictionaries for the users' input
 		users_fam_dir_dict = self.create_users_input_dict(familiar_cols, 'fam_dir_list')
 		users_cuisine_pref_dict = self.create_users_input_dict(preference_cols, 'cuisine_pref_list')
@@ -410,7 +412,6 @@ if __name__ == "__main__":
 
 	# Preprocess the data
 	reader.preprocess(no_below=args.no_below, no_above=args.no_above, force_overwrite=args.overwrite_preprocessing)
-	print 'reader.famcats', reader.famcats
 
 	# Load/train personalised models
 	models = []
@@ -430,7 +431,7 @@ if __name__ == "__main__":
 		models.append(model)
 		# Store the model in a dict
 		model_famcat[fc] = model
-	"""
+
 	# Get all of the surprises for all of the combinations
 	top_surps = []
 	all_comb_surps_per_cuisine = collections.defaultdict(dict)
@@ -444,7 +445,7 @@ if __name__ == "__main__":
 		# print(all_comb_surps_per_cuisine)
 	print('Number of combinations in all_comb_surps_per_cuisine:', len(all_comb_surps_per_cuisine))
 	# print(all_comb_surps_per_cuisine)
-	"""
+
 	# Get familiarity category of the data from the user survey data
 	# The user's familiarity scores for each cuisine (score: between 0-1) [[0.3, 0.3, 0.5, ], [], [] ... ]
 	# Order of cuisines[mexican, chinese, modern, greek, indian, thai, italian]
@@ -455,17 +456,14 @@ if __name__ == "__main__":
 		users_fam_dir, users_cuisine_pref, users_knowledge, users_surp_ratings, users_surp_pref = survey_reader_obj.read_survey(args.user_survey)
 	else:
 		print 'There is no user data, an assumed user will be modeled instead'
-		# users_fam = [
 		user_fam_arr = [
 			[0.5, 0.6, 0.8, 0.6, 0.3, 0.7, 0.5],
 			[0.4, 0.3, 0.2, 0.8, 0.6, 0.7, 0.2]
 		]
 		# Temporarily assign an empty dict
 		users_fam_dir = {}
-		# print 'users_fam', users_fam
 		print 'users_fam', user_fam_arr
 		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
-			# [str(fc) + ": " + str(f) for f, fc in zip(users_fam[0], reader.famcats)]))
 			[str(fc) + ": " + str(f) for f, fc in zip(user_fam_arr[0], reader.famcats)]))
 
 	# Evaluate personalized surprise model
@@ -507,7 +505,7 @@ if __name__ == "__main__":
 	# Store the user_suprise_estimates in a pickle
 	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/new/user_suprise_estimates.pickle'
 	pickle.dump(user_suprise_estimates, open(user_suprise_estimates_pickle_fn, 'wb'))
-	"""
+
 	# Test if all combinations are the same in both dicts
 	print('Number of combinations in all_comb_surps_per_cuisine:', len(all_comb_surps_per_cuisine))
 	print('Number of combinations in all_comb_surps_per_user:', len(all_comb_surps_per_user))
@@ -532,4 +530,3 @@ if __name__ == "__main__":
 	# Store the all_comb_surps_dict in a JSON
 	all_comb_surps_fn = cwd + '/GloVex/results/new/all_comb_surps.json'
 	json.dump(all_comb_surps_dict, open(all_comb_surps_fn, 'w'), indent=4)
-	"""

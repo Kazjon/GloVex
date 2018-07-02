@@ -503,7 +503,7 @@ if __name__ == "__main__":
 	print('Number of combinations in all_comb_surps_per_user:',len(all_comb_surps_per_user))
 
 	# Store the user_suprise_estimates in a pickle
-	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/new/user_suprise_estimates.pickle'
+	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/second_survey/user_suprise_estimates.pickle'
 	pickle.dump(user_suprise_estimates, open(user_suprise_estimates_pickle_fn, 'wb'))
 
 	# Test if all combinations are the same in both dicts
@@ -528,5 +528,5 @@ if __name__ == "__main__":
 		# if each_comb in all_comb_surps_per_user:
 		# 	all_comb_surps_dict[str(each_comb)]['per_user'] = all_comb_surps_per_user[each_comb]
 	# Store the all_comb_surps_dict in a JSON
-	all_comb_surps_fn = cwd + '/GloVex/results/new/all_comb_surps.json'
+	all_comb_surps_fn = cwd + '/GloVex/results/second_survey/all_comb_surps.json'
 	json.dump(all_comb_surps_dict, open(all_comb_surps_fn, 'w'), indent=4)

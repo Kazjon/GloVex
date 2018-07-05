@@ -301,11 +301,11 @@ class survey_reader(object):
 	# end get_knowledge_fam
 
 	# create_users_input_dict: Get dictionary of users' responses separately
-	def create_users_input_dict(self, required_cols, col_list_name):
+	def create_users_input_dict(self, required_cols, col_list_name, scale):
 		# Put the surprise scores in a DF
 		users_df = self.food_cuisine_survey_df[required_cols]
 		# Get the surprise list and put in a column
-		users_df[col_list_name] = (np.array(users_df.values.tolist()) / 5.0).tolist()
+		users_df[col_list_name] = (np.array(users_df.values.tolist()) / scale).tolist()
 		# Create a dict with the keys as the index and the values as the surprise ratings
 		return pd.Series(users_df[col_list_name].values, index=users_df.index).to_dict()
 	# end of create_users_input_dict
@@ -359,11 +359,11 @@ class survey_reader(object):
 		familiar_cols = ['mexican_fam_dir', 'chinese_fam_dir', 'modern_fam_dir', 'greek_fam_dir', 'indian_fam_dir',
 						 'thai_fam_dir', 'italian_fam_dir']
 		# Create dictionaries for the users' input
-		users_fam_dir_dict = self.create_users_input_dict(familiar_cols, 'fam_dir_list')
-		users_cuisine_pref_dict = self.create_users_input_dict(preference_cols, 'cuisine_pref_list')
-		users_knowledge_dict = self.create_users_input_dict(knowledge_cols, 'knowledge_list')
-		users_surp_ratings_dict = self.create_users_input_dict(surprise_rating_cols, 'surp_rating_list')
-		users_surp_pref_dict = self.create_users_input_dict(surprise_preference_cols, 'surp_pref_list')
+		users_fam_dir_dict = self.create_users_input_dict(familiar_cols, 'fam_dir_list', 5.0)
+		users_cuisine_pref_dict = self.create_users_input_dict(preference_cols, 'cuisine_pref_list', 5.0)
+		users_knowledge_dict = self.create_users_input_dict(knowledge_cols, 'knowledge_list', 1)
+		users_surp_ratings_dict = self.create_users_input_dict(surprise_rating_cols, 'surp_rating_list', 5.0)
+		users_surp_pref_dict = self.create_users_input_dict(surprise_preference_cols, 'surp_pref_list', 5.0)
 		# Return all of the dictionaries
 		return users_fam_dir_dict, users_cuisine_pref_dict, users_knowledge_dict, users_surp_ratings_dict, users_surp_pref_dict
 

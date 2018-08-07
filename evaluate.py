@@ -175,6 +175,9 @@ if __name__ == "__main__":
 		reader = preprocessor.WikiPlot_DocReader(args.inputfile, run_name=args.name, use_sglove=args.use_sglove)
 	elif args.dataset == "recipes":
 		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID",None, run_name=args.name, use_sglove=args.use_sglove)
+	elif args.dataset == "acm_hci":
+		# Temporarly use the recipe reader for the ACM a& HCI
+		reader = preprocessor.Recipe_Reader(args.inputfile, "Title and Ingredients", "ID", None, run_name=args.name, use_sglove=args.use_sglove)
 	else:
 		logger.info("You've tried to load a dataset we don't know about.  Sorry.")
 		sys.exit()
@@ -198,6 +201,7 @@ if __name__ == "__main__":
 
 	# Evaluate the model and print/store the surprise scores of the surprise recipes in the survey
 	# dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)
+	# ToDo: Make the offset a parameter so it can be flexible with different datasets
 	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25, offset=73106)
 	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
@@ -205,9 +209,8 @@ if __name__ == "__main__":
 	# Initialize the oracle surprise estimates
 	oracle_suprise_estimates = {}
 	recipe_surp_dict = {}
-	# for doc in dataset_surps[:10]:
 	for doc in dataset_surps:
-		# pp.pprint(doc)
+		pp.pprint(doc)
 		# recipe_surp_dict['recipe_id'] = doc['id']
 		recipe_surp_dict['95th_percentile'] = doc['surprise']
 		recipe_surp_dict['ingredients'] = doc['raw']
@@ -221,5 +224,5 @@ if __name__ == "__main__":
 	# print 'oracle_suprise_estimates', oracle_suprise_estimates
 	pp.pprint(oracle_suprise_estimates)
 	# Store the user_suprise_estimates in a pickle
-	oracle_suprise_estimates_fn = cwd + '/GloVex/results/second_survey/oracle_suprise_estimates.pickle'
+	oracle_suprise_estimates_fn = cwd + '/GloVex/results/' + args.dataset + '/oracle_suprise_estimates.pickle'
 	pickle.dump(oracle_suprise_estimates, open(oracle_suprise_estimates_fn, 'wb'))

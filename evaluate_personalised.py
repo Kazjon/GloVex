@@ -1,4 +1,4 @@
-import os, re, argparse, logging, scipy.spatial, itertools, sys, numpy as np, pandas as pd, pprint, pickle, json, collections
+import os, re, time, argparse, logging, scipy.spatial, itertools, sys, numpy as np, pandas as pd, pprint, pickle, json, collections
 from collections import defaultdict
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -275,7 +275,7 @@ class survey_reader(object):
 			if len(each_col_num) == 0: surprise_recipe_num = 0
 			else: surprise_recipe_num = each_col_num[0]
 			# Name the surprise rating column
-			surprise_rating_col = 'recipe' + str(surprise_recipe_num) + '_' + col_str
+			surprise_rating_col = 'recipe' + str(surprise_recipe_num) + col_str
 			# Convert the users' inputs to ints
 			self.food_cuisine_survey_df[surprise_rating_col] = self.food_cuisine_survey_df[this_col].map(self.familiarity_direct_map)
 	# end get_surprise_fam_pref
@@ -361,7 +361,7 @@ class survey_reader(object):
 		# Create dictionaries for the users' input
 		users_fam_dir_dict = self.create_users_input_dict(familiar_cols, 'fam_dir_list', 5.0)
 		users_cuisine_pref_dict = self.create_users_input_dict(preference_cols, 'cuisine_pref_list', 5.0)
-		users_knowledge_dict = self.create_users_input_dict(knowledge_cols, 'knowledge_list', 1)
+		users_knowledge_dict = self.create_users_input_dict(knowledge_cols, 'knowledge_list', 5.0)
 		users_surp_ratings_dict = self.create_users_input_dict(surprise_rating_cols, 'surp_rating_list', 5.0)
 		users_surp_pref_dict = self.create_users_input_dict(surprise_preference_cols, 'surp_pref_list', 5.0)
 		# Return all of the dictionaries
@@ -370,6 +370,7 @@ class survey_reader(object):
 ########################################################################################################################
 
 if __name__ == "__main__":
+	start_time = time.time()
 	# Get the current dir's path
 	cwd = os.getcwd()
 	# Parse arguments from the command
@@ -503,7 +504,8 @@ if __name__ == "__main__":
 	print('Number of combinations in all_comb_surps_per_user:',len(all_comb_surps_per_user))
 
 	# Store the user_suprise_estimates in a pickle
-	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/second_survey/user_suprise_estimates.pickle'
+	# user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/second_survey/user_suprise_estimates.pickle'
+	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/' + args.dataset + '/user_suprise_estimates.pickle'
 	pickle.dump(user_suprise_estimates, open(user_suprise_estimates_pickle_fn, 'wb'))
 
 	# Test if all combinations are the same in both dicts
@@ -528,5 +530,7 @@ if __name__ == "__main__":
 		# if each_comb in all_comb_surps_per_user:
 		# 	all_comb_surps_dict[str(each_comb)]['per_user'] = all_comb_surps_per_user[each_comb]
 	# Store the all_comb_surps_dict in a JSON
-	all_comb_surps_fn = cwd + '/GloVex/results/second_survey/all_comb_surps.json'
+	# all_comb_surps_fn = cwd + '/GloVex/results/second_survey/all_comb_surps.json'
+	all_comb_surps_fn = cwd + '/GloVex/results/' + args.dataset + '/all_comb_surps.json'
 	json.dump(all_comb_surps_dict, open(all_comb_surps_fn, 'w'), indent=4)
+	print 'Time taken to run the whole script:', (time.time() - start_time) / 60, 'minutes'

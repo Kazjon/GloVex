@@ -1,3 +1,4 @@
+# ToDo: Argument to check the function used for modern
 import os, re, time, argparse, logging, scipy.spatial, itertools, sys, numpy as np, pandas as pd, pprint, pickle, json, collections
 from collections import defaultdict
 pp = pprint.PrettyPrinter(indent=4)
@@ -291,7 +292,7 @@ class survey_reader(object):
 			# Iterate over the set of all possible values for each of the cuisine columns
 			for each_ingredient in frozenset().union(*self.food_cuisine_survey_df[this_col]):
 				# Make the column name as the cuisine name and the ingredient separated by an underscore
-				col_name = cuisine_name + '_knowledge_' + each_ingredient
+				col_name = cuisine_name + '_knowledge_ingredient_' + each_ingredient
 				# Append this name into an array
 				# Transform the names of the ingredients
 				self.food_cuisine_survey_df[col_name] = self.food_cuisine_survey_df.apply(lambda _: int(each_ingredient in _[this_col]), axis=1)
@@ -301,13 +302,13 @@ class survey_reader(object):
 	# end get_knowledge_fam
 
 	# create_users_input_dict: Get dictionary of users' responses separately
-	def create_users_input_dict(self, required_cols, col_list_name, scale):
+	def create_users_input_dict(self, required_cols, scale):
 		# Put the surprise scores in a DF
 		users_df = self.food_cuisine_survey_df[required_cols]
 		# Get the surprise list and put in a column
-		users_df[col_list_name] = (np.array(users_df.values.tolist()) / scale).tolist()
+		users_df['col_list'] = (np.array(users_df.values.tolist()) / scale).tolist()
 		# Create a dict with the keys as the index and the values as the surprise ratings
-		return pd.Series(users_df[col_list_name].values, index=users_df.index).to_dict()
+		return pd.Series(users_df['col_list'].values, index=users_df.index).to_dict()
 	# end of create_users_input_dict
 
 	# read_survey
@@ -338,34 +339,33 @@ class survey_reader(object):
 			self.get_surprise_fam_pref(surprise_preference_str, '_surprise_preference', each_col)
 			# Get knowledge column
 			self.get_knowledge_fam(knowledge_str, each_col)
-		# Get the column names for each of the user input set
-		# familiar_cols = []
-		preference_cols = []
-		knowledge_cols = []
-		surprise_preference_cols = []
-		surprise_rating_cols = []
-		for each_col in self.food_cuisine_survey_df.columns:
-			# if 'fam_dir' in each_col: familiar_cols.append(each_col)
-			if 'cuisine_pref' in each_col: preference_cols.append(each_col)
-			if 'knowledge' in each_col: knowledge_cols.append(each_col)
-			if 'surprise_rating' in each_col: surprise_rating_cols.append(each_col)
-			if 'surprise_preference' in each_col: surprise_preference_cols.append(each_col)
-		# Fix this array as the columns for direct familiarity
-		familiar_cols = ['mexican_fam_dir', 'chinese_fam_dir', 'greek_fam_dir', 'indian_fam_dir', 'thai_fam_dir',
-						 'italian_fam_dir']
-		# Make the modern cuisine's direct familiarity the average of the familiarity of other cuisines
+		# Calculate modern familiarity direct (self-reported)
+		familiar_cols = [col for col in self.food_cuisine_survey_df if 'fam_dir' in col]
 		self.food_cuisine_survey_df['modern_fam_dir'] = self.food_cuisine_survey_df[familiar_cols].mean(axis=1)
-		# Fix this array as the columns for direct familiarity in this order
-		familiar_cols = ['mexican_fam_dir', 'chinese_fam_dir', 'modern_fam_dir', 'greek_fam_dir', 'indian_fam_dir',
-						 'thai_fam_dir', 'italian_fam_dir']
+		# Calculate knowledge score per cuisine (0-5)
+		knowledge_cols = [col for col in self.food_cuisine_survey_df if 'knowledge' in col]
+		cuisine_names = set([each_col.split('_')[0] for each_col in knowledge_cols])
+		for each_cuisine in cuisine_names:
+			cuisine_knowledge_cols = [col for col in knowledge_cols if each_cuisine in col]
+			self.food_cuisine_survey_df[each_cuisine + '_cuisine_knowledge'] = self.food_cuisine_survey_df[cuisine_knowledge_cols].sum(axis=1)
+		# Get the column names for each of the user input set
+		familiar_cols = [col for col in self.food_cuisine_survey_df if 'fam_dir' in col]
+		preference_cols = [col for col in self.food_cuisine_survey_df if 'cuisine_pref' in col]
+		knowledge_ingredient_cols = [col for col in self.food_cuisine_survey_df if '_knowledge_ingredient_' in col]
+		cuisine_knowledge_cols = [col for col in self.food_cuisine_survey_df if '_cuisine_knowledge' in col]
+		surprise_preference_cols = [col for col in self.food_cuisine_survey_df if 'surprise_preference' in col]
+		surprise_rating_cols = [col for col in self.food_cuisine_survey_df if 'surprise_rating' in col]
 		# Create dictionaries for the users' input
-		users_fam_dir_dict = self.create_users_input_dict(familiar_cols, 'fam_dir_list', 5.0)
-		users_cuisine_pref_dict = self.create_users_input_dict(preference_cols, 'cuisine_pref_list', 5.0)
-		users_knowledge_dict = self.create_users_input_dict(knowledge_cols, 'knowledge_list', 5.0)
-		users_surp_ratings_dict = self.create_users_input_dict(surprise_rating_cols, 'surp_rating_list', 5.0)
-		users_surp_pref_dict = self.create_users_input_dict(surprise_preference_cols, 'surp_pref_list', 5.0)
+		users_fam_dir_dict = self.create_users_input_dict(familiar_cols, 5.0)
+		users_cuisine_pref_dict = self.create_users_input_dict(preference_cols, 5.0)
+		users_knowledge_ingredient_dict = self.create_users_input_dict(knowledge_ingredient_cols, 5.0)
+		users_knowledge_cuisine_dict = self.create_users_input_dict(cuisine_knowledge_cols, 5.0)
+		users_surp_ratings_dict = self.create_users_input_dict(surprise_rating_cols, 5.0)
+		users_surp_pref_dict = self.create_users_input_dict(surprise_preference_cols, 5.0)
 		# Return all of the dictionaries
-		return users_fam_dir_dict, users_cuisine_pref_dict, users_knowledge_dict, users_surp_ratings_dict, users_surp_pref_dict
+		return users_fam_dir_dict, users_cuisine_pref_dict, \
+			   users_knowledge_ingredient_dict, users_knowledge_cuisine_dict, \
+			   users_surp_ratings_dict, users_surp_pref_dict
 
 ########################################################################################################################
 
@@ -378,7 +378,6 @@ if __name__ == "__main__":
 	parser.add_argument("inputfile", help='The input file path to work with (omit the args and suffix)')
 	parser.add_argument("--user_survey", default=None, type=str, help='The input file path to the user survey')
 	parser.add_argument("--surprise_recipes", default=None, type=str, help='The input file path to the surprise recipes')
-	# Argument to chekc the function used for modern
 	parser.add_argument("--dataset", default="acm", type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
 	parser.add_argument("--name", default=None, type=str, help="Name of this run (used when saving files.)")
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")
@@ -454,7 +453,9 @@ if __name__ == "__main__":
 		# Construct a survey_reader object
 		survey_reader_obj = survey_reader()
 		# Read the survey
-		users_fam_dir, users_cuisine_pref, users_knowledge, users_surp_ratings, users_surp_pref = survey_reader_obj.read_survey(args.user_survey)
+		users_fam_dir, users_cuisine_pref, \
+		users_knowledge_ingredient, users_knowledge_cuisine, \
+		users_surp_ratings, users_surp_pref = survey_reader_obj.read_survey(args.user_survey)
 	else:
 		print 'There is no user data, an assumed user will be modeled instead'
 		user_fam_arr = [
@@ -462,20 +463,20 @@ if __name__ == "__main__":
 			[0.4, 0.3, 0.2, 0.8, 0.6, 0.7, 0.2]
 		]
 		# Temporarily assign an empty dict
-		users_fam_dir = {}
+		users_fam_dir, users_knowledge_cuisine = {}, {}
 		print 'users_fam', user_fam_arr
 		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
 			[str(fc) + ": " + str(f) for f, fc in zip(user_fam_arr[0], reader.famcats)]))
 
 	# Evaluate personalized surprise model
-	print 'Number of users:', len(users_fam_dir)
+	print 'Number of users:', len(users_knowledge_cuisine)
 	# Initialize the user surprise estimates
 	user_suprise_estimates = {}
 	all_comb_surps_per_user = collections.defaultdict(dict)
 	print('Store all_comb_surps_per_user:')
 	# Repeat for each user
-	for user_idx in users_fam_dir:
-		user_fam_scores = users_fam_dir[user_idx]
+	for user_idx in users_knowledge_cuisine:
+		user_fam_scores = users_knowledge_cuisine[user_idx]
 		print "User's familiarity", user_idx, user_fam_scores
 		# Store the fam cat into the dict
 		user_suprise_estimates[user_idx] = {'user_fam_scores': user_fam_scores, 'recipes_surp': []}
@@ -505,7 +506,7 @@ if __name__ == "__main__":
 
 	# Store the user_suprise_estimates in a pickle
 	# user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/second_survey/user_suprise_estimates.pickle'
-	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/' + args.dataset + '/user_suprise_estimates.pickle'
+	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/' + args.dataset + '_knowledge/user_suprise_estimates.pickle'
 	pickle.dump(user_suprise_estimates, open(user_suprise_estimates_pickle_fn, 'wb'))
 
 	# Test if all combinations are the same in both dicts
@@ -531,6 +532,6 @@ if __name__ == "__main__":
 		# 	all_comb_surps_dict[str(each_comb)]['per_user'] = all_comb_surps_per_user[each_comb]
 	# Store the all_comb_surps_dict in a JSON
 	# all_comb_surps_fn = cwd + '/GloVex/results/second_survey/all_comb_surps.json'
-	all_comb_surps_fn = cwd + '/GloVex/results/' + args.dataset + '/all_comb_surps.json'
+	all_comb_surps_fn = cwd + '/GloVex/results/' + args.dataset + '_knowledge/all_comb_surps.json'
 	json.dump(all_comb_surps_dict, open(all_comb_surps_fn, 'w'), indent=4)
 	print 'Time taken to run the whole script:', (time.time() - start_time) / 60, 'minutes'

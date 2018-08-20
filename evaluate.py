@@ -213,8 +213,7 @@ if __name__ == "__main__":
 	oracle_suprise_estimates = {}
 	recipe_surp_dict = {}
 	for doc in dataset_surps:
-		pp.pprint(doc)
-		# recipe_surp_dict['recipe_id'] = doc['id']
+		# pp.pprint(doc)
 		recipe_surp_dict['95th_percentile'] = doc['surprise_95']
 		recipe_surp_dict['90th_percentile'] = doc['surprise_90']
 		recipe_surp_dict['ingredients'] = doc['raw']

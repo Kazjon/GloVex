@@ -491,7 +491,7 @@ if __name__ == "__main__":
 		user_fam_scores = users_knowledge_cuisine[user_idx]
 		print "User's familiarity", user_idx, user_fam_scores
 		# Store the fam cat into the dict
-		user_suprise_estimates[user_idx] = {'user_fam_scores': user_fam_scores, 'recipes_surp': []}
+		user_suprise_estimates[user_idx] = {'user_fam_scores': user_fam_scores, 'recipes_surp': {}}
 		# Store the surprises; there are two ways to evaluate the surprise recipes
 		dataset_surps = eval_personalised_dataset_surprise(models, reader, user_fam_scores, offset=73106)
 		# Get the unique set of surprises for this user
@@ -504,17 +504,16 @@ if __name__ == "__main__":
 		recipe_surp_dict = {}
 		for doc in dataset_surps:
 			# pp.pprint(doc)
-			doc_id_int = int(doc['id'])
-			recipe_surp_dict[doc_id_int] = {}
-			recipe_surp_dict[doc_id_int]['recipe_id'] = doc_id_int
-			recipe_surp_dict[doc_id_int]['95th_percentile'] = doc['surprise_95']
-			recipe_surp_dict[doc_id_int]['90th_percentile'] = doc['surprise_90']
-			recipe_surp_dict[doc_id_int]['ingredients'] = doc['raw']
-			recipe_surp_dict[doc_id_int]['surprise_cuisine'] = []
+			recipe_surp_dict['95th_percentile'] = doc['surprise_95']
+			recipe_surp_dict['90th_percentile'] = doc['surprise_90']
+			recipe_surp_dict['ingredients'] = doc['raw']
+			recipe_surp_dict['surprise_cuisine'] = []
 			for surprise_combination in doc['surprises']:
-				recipe_surp_dict[doc_id_int]['surprise_cuisine'].append(surprise_combination)
+				recipe_surp_dict['surprise_cuisine'].append(surprise_combination)
 			# Append the recipe_surp_dict to the user_suprise_estimates
-			user_suprise_estimates[user_idx]['recipes_surp'].append(recipe_surp_dict)
+			# user_suprise_estimates[user_idx]['recipes_surp'].append(recipe_surp_dict)
+			doc_id_int = int(doc['id'])
+			user_suprise_estimates[user_idx]['recipes_surp'][doc_id_int] = recipe_surp_dict
 			# Renew/empty the dict for next iteration
 			recipe_surp_dict = {}
 	print 'Number of combinations in all_comb_surps_per_user:', len(all_comb_surps_per_user)

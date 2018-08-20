@@ -22,7 +22,10 @@ def eval_dataset_surprise(model, reader, top_n_per_doc = 0, log_every=1000, igno
 			if top_n_per_doc and len(surps) > top_n_per_doc:
 				surps = surps[:top_n_per_doc]
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
-			dataset_surps.append({"id": id,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
+			dataset_surps.append({"id": id,"raw":raw_doc,
+								  "surprises":surps,
+								  "surprise_95": document_surprise(surps),
+								  "surprise_90": document_surprise(surps, percentile=90)})
 		else:
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
 			dataset_surps.append({"id": id,"raw":raw_doc, "surprises":[], "surprise": float("-inf")})
@@ -203,7 +206,7 @@ if __name__ == "__main__":
 	# dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25)
 	# ToDo: Make the offset a parameter so it can be flexible with different datasets
 	dataset_surps = eval_dataset_surprise(model, reader, top_n_per_doc=25, offset=73106)
-	dataset_surps.sort(key = lambda x: x["surprise"], reverse=True)
+	# dataset_surps.sort(key = lambda x: x["surprise_95"], reverse=True)
 	unique_surps = set((p for s in dataset_surps for p in s["surprises"]))
 	print 'dataset_surps', len(dataset_surps)
 	# Initialize the oracle surprise estimates
@@ -212,13 +215,14 @@ if __name__ == "__main__":
 	for doc in dataset_surps:
 		pp.pprint(doc)
 		# recipe_surp_dict['recipe_id'] = doc['id']
-		recipe_surp_dict['95th_percentile'] = doc['surprise']
+		recipe_surp_dict['95th_percentile'] = doc['surprise_95']
+		recipe_surp_dict['90th_percentile'] = doc['surprise_90']
 		recipe_surp_dict['ingredients'] = doc['raw']
 		recipe_surp_dict['surprise_cuisine'] = []
 		for surprise_combination in doc['surprises']:
 			recipe_surp_dict['surprise_cuisine'].append(surprise_combination)
 		# Append the recipe_surp_dict to the user_suprise_estimates
-		oracle_suprise_estimates[doc['id']] = recipe_surp_dict
+		oracle_suprise_estimates[int(doc['id'])] = recipe_surp_dict
 		# Renew/empty the dict for next iteration
 		recipe_surp_dict = {}
 	# print 'oracle_suprise_estimates', oracle_suprise_estimates

@@ -1,4 +1,5 @@
 # ToDo: Argument to check the function used for modern
+# ToDo: remove the half not sure users starting from here
 import os, re, time, argparse, logging, scipy.spatial, itertools, sys, numpy as np, pandas as pd, pprint, pickle, json, collections
 from collections import defaultdict
 pp = pprint.PrettyPrinter(indent=4)
@@ -314,6 +315,17 @@ class survey_reader(object):
 		return pd.Series(users_df['col_list'].values, index=users_df.index).to_dict()
 	# end of create_users_input_dict
 
+	def remove_highly_unsure(self):
+		_surprise_rating_cols_ = [col for col in self.food_cuisine_survey_df if 'surprise_rating' in col]
+		num_surp_ratings = len(_surprise_rating_cols_)
+		unsure_surprise_ratings = (self.food_cuisine_survey_df[_surprise_rating_cols_] == -1).sum(axis=1)
+		sure_users = unsure_surprise_ratings[unsure_surprise_ratings < (num_surp_ratings / 2)]
+		sure_users_index = list(sure_users.index)
+		# unsure_users_index = [56, 134, 205, 253, 275, 277, 290, 306, 385, 415, 502, 514, 563, 569, 588, 708, 711,
+		# 					  712, 713, 783, 808]
+		# len(unsure_users_index) == 21
+		return self.food_cuisine_survey_df.loc[sure_users_index]
+
 	# read_survey
 	def read_survey(self, food_cuisine_survey_fn, _fam_cats_sorted_):
 		# Add .csv to the file path
@@ -342,6 +354,11 @@ class survey_reader(object):
 			self.get_surprise_fam_pref(surprise_preference_str, '_surprise_preference', each_col)
 			# Get knowledge column
 			self.get_knowledge_fam(knowledge_str, each_col)
+		# Remove highly unsure users
+		num_users = len(self.food_cuisine_survey_df)
+		# print 'num_users', num_users
+		self.food_cuisine_survey_df = self.remove_highly_unsure()
+		# print 'Number of removed users:', num_users - len(self.food_cuisine_survey_df)
 		# Calculate modern familiarity direct (self-reported)
 		_familiar_cols_ = [col for col in self.food_cuisine_survey_df if 'fam_dir' in col]
 		self.food_cuisine_survey_df['modern_fam_dir'] = self.food_cuisine_survey_df[_familiar_cols_].mean(axis=1)

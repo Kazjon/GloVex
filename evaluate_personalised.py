@@ -10,7 +10,7 @@ logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=lo
 logger = logging.getLogger("glovex")
 
 def eval_personalised_dataset_surprise(models, reader, user, log_every=1000, ignore_order=True, offset=0):
-	logger.info("  ** Evaluating dataset..")
+	# logger.info("  ** Evaluating dataset..")
 	dataset_surps = []
 	count = 0
 	for id, doc, raw_doc in zip(reader.doc_ids[offset:], reader.documents[offset:], reader.doc_raws[offset:]):
@@ -26,7 +26,7 @@ def eval_personalised_dataset_surprise(models, reader, user, log_every=1000, ign
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
 			dataset_surps.append({"id": id, "raw":raw_doc, "surprises":[], "surprise": float("-inf")})
 		count+=1
-	logger.info("  ** Evaluation complete.")
+	# logger.info("  ** Evaluation complete.")
 	return dataset_surps
 
 def convert_personalised_to_combined_surprise(surps, dictionary):
@@ -424,6 +424,8 @@ if __name__ == "__main__":
 						help="Ignore (and overwrite) existing .preprocessed file.")
 	parser.add_argument("--use_sglove", action="store_true",
 						help="Use the modified version of the GloVe algorithm that favours surprise rather than co-occurrence.")
+	parser.add_argument("--familiarity", default="self_reported", type=str,
+						help="Which familiarity to use, either self-reported or according to answers to the knowledge questions.")
 	args = parser.parse_args()
 
 	# Read the documents according to its type
@@ -497,15 +499,27 @@ if __name__ == "__main__":
 		logger.info(" ** Generated fake user familiarity profile: " + ", ".join(
 			[str(fc) + ": " + str(f) for f, fc in zip(user_fam_arr[0], reader.famcats)]))
 
+	# Pick the type of familiarity to be used; either self-reported or knowledge
+	selected_familiarity = {}
+	if args.familiarity == 'self_reported':
+		logger.info("Familiarity: self-report")
+		selected_familiarity = users_fam_dir
+	elif args.familiarity == 'knowledge':
+		logger.info("Familiarity: knowledge")
+		selected_familiarity = users_knowledge_cuisine
+	else:
+		logger.info("You've tried to use familiairity that's undefined. Sorry!")
+		sys.exit()
+
 	# Evaluate personalized surprise model
-	print 'Number of users:', len(users_knowledge_cuisine)
+	print 'Number of users:', len(selected_familiarity)
 	# Initialize the user surprise estimates
 	user_suprise_estimates = {}
 	all_comb_surps_per_user = collections.defaultdict(dict)
 	print 'Store all_comb_surps_per_user:'
 	# Repeat for each user
-	for user_idx in users_knowledge_cuisine:
-		user_fam_scores = users_knowledge_cuisine[user_idx]
+	for user_idx in selected_familiarity:
+		user_fam_scores = selected_familiarity[user_idx]
 		print "User's familiarity", user_idx, user_fam_scores
 		# Store the fam cat into the dict
 		user_suprise_estimates[user_idx] = {'user_fam_scores': user_fam_scores, 'recipes_surp': {}}
@@ -536,9 +550,8 @@ if __name__ == "__main__":
 	print 'Number of combinations in all_comb_surps_per_user:', len(all_comb_surps_per_user)
 
 	# Store the user_suprise_estimates in a pickle
-	# user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/second_survey/user_suprise_estimates.pickle'
 	print 'Storing user_suprise_estimates:'
-	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/' + args.dataset + '_knowledge/user_suprise_estimates.pickle'
+	user_suprise_estimates_pickle_fn = cwd + '/GloVex/results/' + args.dataset + '_' + args.familiarity + '/user_suprise_estimates.pickle'
 	pickle.dump(user_suprise_estimates, open(user_suprise_estimates_pickle_fn, 'wb'))
 
 	# # Test if all combinations are the same in both dicts
@@ -564,6 +577,6 @@ if __name__ == "__main__":
 	# 	# 	all_comb_surps_dict[str(each_comb)]['per_user'] = all_comb_surps_per_user[each_comb]
 	# # Store the all_comb_surps_dict in a JSON
 	# # all_comb_surps_fn = cwd + '/GloVex/results/second_survey/all_comb_surps.json'
-	# all_comb_surps_fn = cwd + '/GloVex/results/' + args.dataset + '_knowledge/all_comb_surps.json'
+	# all_comb_surps_fn = cwd + '/GloVex/results/' + args.dataset + '_' + args.familiarity + '/all_comb_surps.json'
 	# json.dump(all_comb_surps_dict, open(all_comb_surps_fn, 'w'), indent=4)
 	# print 'Time taken to run the whole script:', (time.time() - start_time) / 60, 'minutes'

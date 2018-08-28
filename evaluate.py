@@ -225,7 +225,7 @@ if __name__ == "__main__":
 		# Renew/empty the dict for next iteration
 		recipe_surp_dict = {}
 	# print 'oracle_suprise_estimates', oracle_suprise_estimates
-	pp.pprint(oracle_suprise_estimates)
+	# pp.pprint(oracle_suprise_estimates)
 	# Store the user_suprise_estimates in a pickle
-	oracle_suprise_estimates_fn = cwd + '/GloVex/results/' + args.dataset + '/oracle_suprise_estimates.pickle'
+	oracle_suprise_estimates_fn = cwd + '/GloVex/results/' + args.dataset + '_oracle/oracle_suprise_estimates.pickle'
 	pickle.dump(oracle_suprise_estimates, open(oracle_suprise_estimates_fn, 'wb'))

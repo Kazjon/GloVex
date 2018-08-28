@@ -507,6 +507,13 @@ if __name__ == "__main__":
 	elif args.familiarity == 'knowledge':
 		logger.info("Familiarity: knowledge")
 		selected_familiarity = users_knowledge_cuisine
+	elif args.familiarity == 'averaged':
+		logger.info("Familiarity: averaged")
+		# Get the average per user between the self-reported familiarity and knowledge questions familiarity
+		averaged_fam = {
+		each_user: list(np.average(np.array([users_fam_dir[each_user], users_knowledge_cuisine[each_user]]), axis=0))
+		for each_user in users_fam_dir}
+		selected_familiarity = averaged_fam
 	else:
 		logger.info("You've tried to use familiairity that's undefined. Sorry!")
 		sys.exit()

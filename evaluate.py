@@ -19,13 +19,18 @@ def eval_dataset_surprise(model, reader, top_n_per_doc = 0, log_every=1000, igno
 			logger.info("    **** Evaluated "+str(count)+" documents.")
 		if len(doc):
 			surps = estimate_document_surprise_pairs(doc, model, reader.cooccurrence, reader.word_occurrence, reader.dictionary, reader.documents, use_sglove=reader.use_sglove, ignore_order=ignore_order)
+			observed_surps = observe_document_surprise_pairs(doc, reader.cooccurrence, reader.word_occurrence, reader.dictionary, reader.documents, ignore_order=ignore_order)
 			if top_n_per_doc and len(surps) > top_n_per_doc:
 				surps = surps[:top_n_per_doc]
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
 			dataset_surps.append({"id": id,"raw":raw_doc,
 								  "surprises":surps,
 								  "surprise_95": document_surprise(surps),
-								  "surprise_90": document_surprise(surps, percentile=90)})
+								  "surprise_90": document_surprise(surps, percentile=90),
+							  	  "observed_surprises":observed_surps,
+							  	  "observed_surprise_95": document_surprise(observed_surps),
+							      "observed_surprise_90": document_surprise(observed_surps, percentile=90),
+							  })
 		else:
 			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":[], "surprise": float("inf")})
 			dataset_surps.append({"id": id,"raw":raw_doc, "surprises":[], "surprise": float("-inf")})
@@ -37,6 +42,22 @@ def document_surprise(surps, percentile=95):
 	if len(surps):
 		return np.percentile([x[2] for x in surps], percentile) #note that percentile calculates the highest.
 	return float("-inf")
+
+def observe_document_surprise_pairs(doc, cooccurrence, word_occurrence, dictionary, documents, top_n_per_doc = 0, ignore_order=True):
+	obs_cooc_mat = filter_observed_document_cooccurrence_matrix(doc, cooccurrence)
+	surps = document_cooccurrence_to_surprise(doc, obs_cooc_mat, word_occurrence, dictionary, len(documents), ignore_order=ignore_order)
+	surps.sort(key = lambda x: x[2], reverse=True)
+	if top_n_per_doc and len(surps) > top_n_per_doc:
+		return surps[:top_n_per_doc]
+	return surps
+	
+def filter_observed_document_cooccurrence_matrix(doc, cooccurrence):
+	cooc_mat = np.zeros([len(doc),len(doc)])
+	for i1,i2 in itertools.combinations(range(len(doc)),2):
+		d1 = doc[i1][0]
+		d2 = doc[i2][0]
+		cooc_mat[i1,i2] = cooccurrence[d1][d2]
+	return np.triu(np.exp(cooc_mat), k=1)	
 
 def estimate_document_surprise_pairs(doc, model, cooccurrence, word_occurrence, dictionary, documents, use_sglove=False, top_n_per_doc = 0, ignore_order=True):
 	est_cooc_mat = estimate_document_cooccurrence_matrix(doc, model, cooccurrence, use_sglove=use_sglove)

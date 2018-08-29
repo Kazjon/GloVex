@@ -44,20 +44,20 @@ def document_surprise(surps, percentile=95):
 	return float("-inf")
 
 def observe_document_surprise_pairs(doc, cooccurrence, word_occurrence, dictionary, documents, top_n_per_doc = 0, ignore_order=True):
-	obs_cooc_mat = filter_observed_document_cooccurrence_matrix(doc, cooccurrence)
+	obs_cooc_mat = filter_observed_document_cooccurrence_matrix(doc, cooccurrence, word_occurrence, dictionary, len(documents))
 	surps = document_cooccurrence_to_surprise(doc, obs_cooc_mat, word_occurrence, dictionary, len(documents), ignore_order=ignore_order)
 	surps.sort(key = lambda x: x[2], reverse=True)
 	if top_n_per_doc and len(surps) > top_n_per_doc:
 		return surps[:top_n_per_doc]
 	return surps
 	
-def filter_observed_document_cooccurrence_matrix(doc, cooccurrence):
+def filter_observed_document_cooccurrence_matrix(doc, cooccurrence, word_occurrence, dictionary, n_docs):
 	cooc_mat = np.zeros([len(doc),len(doc)])
 	for i1,i2 in itertools.combinations(range(len(doc)),2):
 		d1 = doc[i1][0]
 		d2 = doc[i2][0]
-		cooc_mat[i1,i2] = cooccurrence[d1][d2]
-	return np.triu(np.exp(cooc_mat), k=1)	
+		cooc_mat[i1,i2] = cooccurrence[d1][d2] #word_pair_surprise(cooccurrence[d1][d2],word_occurrence[dictionary[d1]],word_occurrence[dictionary[d2]], n_docs)
+	return np.triu(cooc_mat, k=1)
 
 def estimate_document_surprise_pairs(doc, model, cooccurrence, word_occurrence, dictionary, documents, use_sglove=False, top_n_per_doc = 0, ignore_order=True):
 	est_cooc_mat = estimate_document_cooccurrence_matrix(doc, model, cooccurrence, use_sglove=use_sglove)
@@ -73,14 +73,6 @@ def word_pair_surprise(w1_w2_cooccurrence, w1_occurrence, w2_occurrence, n_docs,
 	p_w1_given_w2 = (w1_w2_cooccurrence + offset) / (w2_occurrence + offset)
 	p_w1 = (w1_occurrence + offset) / (n_docs + offset)
 	return -np.log2(p_w1_given_w2 / p_w1)
-
-def extract_document_cooccurrence_matrix(doc, coocurrence):
-	cooc_mat = np.zeros([len(doc),len(doc)])
-	for i1,i2 in itertools.combinations(range(len(doc)),2):
-		d1 = doc[i1][0]
-		d2 = doc[i2][0]
-		cooc_mat[i1,i2] = coocurrence[d1][d2]
-	return cooc_mat
 
 def estimate_word_pair_cooccurrence(wk1, wk2, model, cooccurrence, use_sglove = False):
 	# take dot product of vectors

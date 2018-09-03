@@ -22,8 +22,8 @@ def eval_dataset_surprise(model, reader, top_n_per_doc = 0, log_every=1000, igno
 			observed_surps = observe_document_surprise_pairs(doc, reader.cooccurrence, reader.word_occurrence, reader.dictionary, reader.documents, ignore_order=ignore_order)
 			if top_n_per_doc and len(surps) > top_n_per_doc:
 				surps = surps[:top_n_per_doc]
-			# dataset_surps.append({"id": id,"title":title,"raw":raw_doc, "surprises":surps, "surprise": document_surprise(surps)})
-			dataset_surps.append({"id": id,"raw":raw_doc,
+			# Save the oracle surprise estimates with their IDs and raw document
+			dataset_surps.append({"id": id, "raw":raw_doc,
 								  "surprises":surps,
 								  "surprise_95": document_surprise(surps),
 								  "surprise_90": document_surprise(surps, percentile=90),
@@ -50,7 +50,7 @@ def observe_document_surprise_pairs(doc, cooccurrence, word_occurrence, dictiona
 	if top_n_per_doc and len(surps) > top_n_per_doc:
 		return surps[:top_n_per_doc]
 	return surps
-	
+
 def filter_observed_document_cooccurrence_matrix(doc, cooccurrence, word_occurrence, dictionary, n_docs):
 	cooc_mat = np.zeros([len(doc),len(doc)])
 	for i1,i2 in itertools.combinations(range(len(doc)),2):
@@ -225,14 +225,20 @@ if __name__ == "__main__":
 	# Initialize the oracle surprise estimates
 	oracle_suprise_estimates = {}
 	recipe_surp_dict = {}
+	# Iterate over the surprise estimates to store them in a dict structure
 	for doc in dataset_surps:
 		# pp.pprint(doc)
 		recipe_surp_dict['95th_percentile'] = doc['surprise_95']
 		recipe_surp_dict['90th_percentile'] = doc['surprise_90']
+		# ToDo: observed_surps
+		recipe_surp_dict['observed_95th_percentile'] = doc['observed_surprise_95']
+		recipe_surp_dict['observed_90th_percentile'] = doc['observed_surprise_90']
 		recipe_surp_dict['ingredients'] = doc['raw']
 		recipe_surp_dict['surprise_cuisine'] = []
 		for surprise_combination in doc['surprises']:
 			recipe_surp_dict['surprise_cuisine'].append(surprise_combination)
+		for observed_surprise_combination in doc['observed_surprises']:
+			recipe_surp_dict['observed_surprise_cuisine'].append(observed_surprise_combination)
 		# Append the recipe_surp_dict to the user_suprise_estimates
 		oracle_suprise_estimates[int(doc['id'])] = recipe_surp_dict
 		# Renew/empty the dict for next iteration

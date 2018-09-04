@@ -230,13 +230,15 @@ if __name__ == "__main__":
 		# pp.pprint(doc)
 		recipe_surp_dict['95th_percentile'] = doc['surprise_95']
 		recipe_surp_dict['90th_percentile'] = doc['surprise_90']
-		# ToDo: observed_surps
 		recipe_surp_dict['observed_95th_percentile'] = doc['observed_surprise_95']
 		recipe_surp_dict['observed_90th_percentile'] = doc['observed_surprise_90']
 		recipe_surp_dict['ingredients'] = doc['raw']
+		# Save the estimated surprise scores for each pair
 		recipe_surp_dict['surprise_cuisine'] = []
 		for surprise_combination in doc['surprises']:
 			recipe_surp_dict['surprise_cuisine'].append(surprise_combination)
+		# Save the observed surprise scores for each pair
+		recipe_surp_dict['observed_surprise_cuisine'] = []
 		for observed_surprise_combination in doc['observed_surprises']:
 			recipe_surp_dict['observed_surprise_cuisine'].append(observed_surprise_combination)
 		# Append the recipe_surp_dict to the user_suprise_estimates

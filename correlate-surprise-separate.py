@@ -648,126 +648,126 @@ print 'pearsonr', pearsonr(observed_surp_estimates_95perc, novice_surp_ratings_r
 # print 'spearmanr', spearmanr(observed_surp_estimates_max, novice_surp_ratings_recipelvl_avg)
 print 'pearsonr', pearsonr(observed_surp_estimates_max, novice_surp_ratings_recipelvl_avg)
 
-#
-# # Correlations users flattened
-#
-# # In[28]:
-#
-#
-# # All
-# print '90th percentile'
-# print 'spearmanr', spearmanr(personalized_surp_estimates_userflat_90perc, users_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(personalized_surp_estimates_userflat_90perc, users_surp_ratings_user_flat)
-# print '95th percentile'
-# print 'spearmanr', spearmanr(personalized_surp_estimates_userflat_95perc, users_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(personalized_surp_estimates_userflat_95perc, users_surp_ratings_user_flat)
-# print 'Max score'
-# print 'spearmanr', spearmanr(personalized_surp_estimates_userflat_max, users_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(personalized_surp_estimates_userflat_max, users_surp_ratings_user_flat)
-#
-#
-# # In[29]:
-#
-#
-# # Foodies
-# print '90th percentile'
-# print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_userflat_90perc, foodie_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_userflat_90perc, foodie_surp_ratings_user_flat)
-# print '95th percentile'
-# print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_userflat_95perc, foodie_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_userflat_95perc, foodie_surp_ratings_user_flat)
-# print 'Max score'
-# print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_userflat_max, foodie_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_userflat_max, foodie_surp_ratings_user_flat)
-#
-#
-# # In[30]:
-#
-#
-# # Novices
-# print '90th percentile'
-# print 'spearmanr', spearmanr(novice_personalized_surp_estimates_userflat_90perc, novice_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(novice_personalized_surp_estimates_userflat_90perc, novice_surp_ratings_user_flat)
-# print '95th percentile'
-# print 'spearmanr', spearmanr(novice_personalized_surp_estimates_userflat_95perc, novice_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(novice_personalized_surp_estimates_userflat_95perc, novice_surp_ratings_user_flat)
-# print 'Max score'
-# print 'spearmanr', spearmanr(novice_personalized_surp_estimates_userflat_max, novice_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(novice_personalized_surp_estimates_userflat_max, novice_surp_ratings_user_flat)
-#
-#
-# # Correlations recipes flattened
-#
-# # In[31]:
-#
-#
-# # All
-# print '90th percentile'
-# print 'spearmanr', spearmanr(personalized_surp_estimates_recipeflat_90perc, users_surp_ratings_recipe_flat)
-# print 'pearsonr', pearsonr(personalized_surp_estimates_recipeflat_90perc, users_surp_ratings_recipe_flat)
-# print '95th percentile'
-# print 'spearmanr', spearmanr(personalized_surp_estimates_recipeflat_95perc, users_surp_ratings_recipe_flat)
-# print 'pearsonr', pearsonr(personalized_surp_estimates_recipeflat_95perc, users_surp_ratings_recipe_flat)
-# print 'Max score'
-# print 'spearmanr', spearmanr(personalized_surp_estimates_recipeflat_max, users_surp_ratings_recipe_flat)
-# print 'pearsonr', pearsonr(personalized_surp_estimates_recipeflat_max, users_surp_ratings_recipe_flat)
-#
-#
-# # In[32]:
-#
-#
-# # Foodies
-# print '90th percentile'
-# print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_recipeflat_90perc, foodie_surp_ratings_recipe_flat)
-# print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_recipeflat_90perc, foodie_surp_ratings_recipe_flat)
-# print '95th percentile'
-# print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_recipeflat_95perc, foodie_surp_ratings_recipe_flat)
-# print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_recipeflat_95perc, foodie_surp_ratings_recipe_flat)
-# print 'Max score'
-# print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_recipeflat_max, foodie_surp_ratings_recipe_flat)
-# print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_recipeflat_max, foodie_surp_ratings_recipe_flat)
-#
-#
-# # In[33]:
-#
-#
-# # Novices
-# print '90th percentile'
-# print 'spearmanr', spearmanr(novice_personalized_surp_estimates_recipeflat_90perc, novice_surp_ratings_recipe_flat)
-# print 'pearsonr', pearsonr(novice_personalized_surp_estimates_recipeflat_90perc, novice_surp_ratings_recipe_flat)
-# print '95th percentile'
-# print 'spearmanr', spearmanr(novice_personalized_surp_estimates_recipeflat_95perc, novice_surp_ratings_recipe_flat)
-# print 'pearsonr', pearsonr(novice_personalized_surp_estimates_recipeflat_95perc, novice_surp_ratings_recipe_flat)
-# print 'Max score'
-# print 'spearmanr', spearmanr(novice_personalized_surp_estimates_recipeflat_max, novice_surp_ratings_recipe_flat)
-# print 'pearsonr', pearsonr(novice_personalized_surp_estimates_recipeflat_max, novice_surp_ratings_recipe_flat)
-#
-#
-# # Replicate the oracle by the number of the users to be able to correlate with the users' ratings (the arrays have to be the same size)
-#
-# # In[34]:
-#
-#
-# oracle_surp_estimates_repeated_90perc = [oracle_surp_estimates_90perc] * len(users_surp_ratings_userlvl)
-# oracle_surp_estimates_repeated_95perc = [oracle_surp_estimates_95perc] * len(users_surp_ratings_userlvl)
-# oracle_surp_estimates_repeated_max = [oracle_surp_estimates_max] * len(users_surp_ratings_userlvl)
-# oracle_surp_estimates_userflat_90perc = [item for sublist in oracle_surp_estimates_repeated_90perc for item in sublist]
-# oracle_surp_estimates_userflat_95perc = [item for sublist in oracle_surp_estimates_repeated_95perc for item in sublist]
-# oracle_surp_estimates_userflat_max = [item for sublist in oracle_surp_estimates_repeated_max for item in sublist]
-#
-#
-# # Correlations oracle flattened
-#
-# # In[35]:
-#
-#
-# print '90th percentile'
-# print 'spearmanr', spearmanr(oracle_surp_estimates_userflat_90perc, users_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(oracle_surp_estimates_userflat_90perc, users_surp_ratings_user_flat)
-# print '95th percentile'
-# print 'spearmanr', spearmanr(oracle_surp_estimates_userflat_95perc, users_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(oracle_surp_estimates_userflat_95perc, users_surp_ratings_user_flat)
-# print 'Max score'
-# print 'spearmanr', spearmanr(oracle_surp_estimates_userflat_max, users_surp_ratings_user_flat)
-# print 'pearsonr', pearsonr(oracle_surp_estimates_userflat_max, users_surp_ratings_user_flat)
-#
+
+# Correlations users flattened
+
+# In[28]:
+
+
+# All
+print '90th percentile'
+print 'spearmanr', spearmanr(personalized_surp_estimates_userflat_90perc, users_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(personalized_surp_estimates_userflat_90perc, users_surp_ratings_user_flat)
+print '95th percentile'
+print 'spearmanr', spearmanr(personalized_surp_estimates_userflat_95perc, users_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(personalized_surp_estimates_userflat_95perc, users_surp_ratings_user_flat)
+print 'Max score'
+print 'spearmanr', spearmanr(personalized_surp_estimates_userflat_max, users_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(personalized_surp_estimates_userflat_max, users_surp_ratings_user_flat)
+
+
+# In[29]:
+
+
+# Foodies
+print '90th percentile'
+print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_userflat_90perc, foodie_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_userflat_90perc, foodie_surp_ratings_user_flat)
+print '95th percentile'
+print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_userflat_95perc, foodie_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_userflat_95perc, foodie_surp_ratings_user_flat)
+print 'Max score'
+print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_userflat_max, foodie_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_userflat_max, foodie_surp_ratings_user_flat)
+
+
+# In[30]:
+
+
+# Novices
+print '90th percentile'
+print 'spearmanr', spearmanr(novice_personalized_surp_estimates_userflat_90perc, novice_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(novice_personalized_surp_estimates_userflat_90perc, novice_surp_ratings_user_flat)
+print '95th percentile'
+print 'spearmanr', spearmanr(novice_personalized_surp_estimates_userflat_95perc, novice_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(novice_personalized_surp_estimates_userflat_95perc, novice_surp_ratings_user_flat)
+print 'Max score'
+print 'spearmanr', spearmanr(novice_personalized_surp_estimates_userflat_max, novice_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(novice_personalized_surp_estimates_userflat_max, novice_surp_ratings_user_flat)
+
+
+# Correlations recipes flattened
+
+# In[31]:
+
+
+# All
+print '90th percentile'
+print 'spearmanr', spearmanr(personalized_surp_estimates_recipeflat_90perc, users_surp_ratings_recipe_flat)
+print 'pearsonr', pearsonr(personalized_surp_estimates_recipeflat_90perc, users_surp_ratings_recipe_flat)
+print '95th percentile'
+print 'spearmanr', spearmanr(personalized_surp_estimates_recipeflat_95perc, users_surp_ratings_recipe_flat)
+print 'pearsonr', pearsonr(personalized_surp_estimates_recipeflat_95perc, users_surp_ratings_recipe_flat)
+print 'Max score'
+print 'spearmanr', spearmanr(personalized_surp_estimates_recipeflat_max, users_surp_ratings_recipe_flat)
+print 'pearsonr', pearsonr(personalized_surp_estimates_recipeflat_max, users_surp_ratings_recipe_flat)
+
+
+# In[32]:
+
+
+# Foodies
+print '90th percentile'
+print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_recipeflat_90perc, foodie_surp_ratings_recipe_flat)
+print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_recipeflat_90perc, foodie_surp_ratings_recipe_flat)
+print '95th percentile'
+print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_recipeflat_95perc, foodie_surp_ratings_recipe_flat)
+print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_recipeflat_95perc, foodie_surp_ratings_recipe_flat)
+print 'Max score'
+print 'spearmanr', spearmanr(foodie_personalized_surp_estimates_recipeflat_max, foodie_surp_ratings_recipe_flat)
+print 'pearsonr', pearsonr(foodie_personalized_surp_estimates_recipeflat_max, foodie_surp_ratings_recipe_flat)
+
+
+# In[33]:
+
+
+# Novices
+print '90th percentile'
+print 'spearmanr', spearmanr(novice_personalized_surp_estimates_recipeflat_90perc, novice_surp_ratings_recipe_flat)
+print 'pearsonr', pearsonr(novice_personalized_surp_estimates_recipeflat_90perc, novice_surp_ratings_recipe_flat)
+print '95th percentile'
+print 'spearmanr', spearmanr(novice_personalized_surp_estimates_recipeflat_95perc, novice_surp_ratings_recipe_flat)
+print 'pearsonr', pearsonr(novice_personalized_surp_estimates_recipeflat_95perc, novice_surp_ratings_recipe_flat)
+print 'Max score'
+print 'spearmanr', spearmanr(novice_personalized_surp_estimates_recipeflat_max, novice_surp_ratings_recipe_flat)
+print 'pearsonr', pearsonr(novice_personalized_surp_estimates_recipeflat_max, novice_surp_ratings_recipe_flat)
+
+
+# Replicate the oracle by the number of the users to be able to correlate with the users' ratings (the arrays have to be the same size)
+
+# In[34]:
+
+
+oracle_surp_estimates_repeated_90perc = [oracle_surp_estimates_90perc] * len(users_surp_ratings_userlvl)
+oracle_surp_estimates_repeated_95perc = [oracle_surp_estimates_95perc] * len(users_surp_ratings_userlvl)
+oracle_surp_estimates_repeated_max = [oracle_surp_estimates_max] * len(users_surp_ratings_userlvl)
+oracle_surp_estimates_userflat_90perc = [item for sublist in oracle_surp_estimates_repeated_90perc for item in sublist]
+oracle_surp_estimates_userflat_95perc = [item for sublist in oracle_surp_estimates_repeated_95perc for item in sublist]
+oracle_surp_estimates_userflat_max = [item for sublist in oracle_surp_estimates_repeated_max for item in sublist]
+
+
+# Correlations oracle flattened
+
+# In[35]:
+
+
+print '90th percentile'
+print 'spearmanr', spearmanr(oracle_surp_estimates_userflat_90perc, users_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(oracle_surp_estimates_userflat_90perc, users_surp_ratings_user_flat)
+print '95th percentile'
+print 'spearmanr', spearmanr(oracle_surp_estimates_userflat_95perc, users_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(oracle_surp_estimates_userflat_95perc, users_surp_ratings_user_flat)
+print 'Max score'
+print 'spearmanr', spearmanr(oracle_surp_estimates_userflat_max, users_surp_ratings_user_flat)
+print 'pearsonr', pearsonr(oracle_surp_estimates_userflat_max, users_surp_ratings_user_flat)
+

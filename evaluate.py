@@ -248,5 +248,5 @@ if __name__ == "__main__":
 	# print 'oracle_suprise_estimates', oracle_suprise_estimates
 	# pp.pprint(oracle_suprise_estimates)
 	# Store the user_suprise_estimates in a pickle
-	oracle_suprise_estimates_fn = cwd + '/GloVex/results/' + args.dataset + '_oracle/oracle_suprise_estimates.pickle'
+	oracle_suprise_estimates_fn = cwd + '/GloVex/results/' + args.dataset + '_oracle/oracle_suprise.pickle'
 	pickle.dump(oracle_suprise_estimates, open(oracle_suprise_estimates_fn, 'wb'))

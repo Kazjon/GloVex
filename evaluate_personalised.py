@@ -404,7 +404,6 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Evaluate a dataset using a trained GloVex model.")
 	parser.add_argument("inputfile", help='The input file path to work with (omit the args and suffix)')
 	parser.add_argument("--user_survey", default=None, type=str, help='The input file path to the user survey')
-	parser.add_argument("--surprise_recipes", default=None, type=str, help='The input file path to the surprise recipes')
 	parser.add_argument("--dataset", default="acm", type=str, help="Which dataset to assume.  Currently 'acm' or 'plots'")
 	parser.add_argument("--name", default=None, type=str, help="Name of this run (used when saving files.)")
 	parser.add_argument("--dims", default = 100, type=int, help="The number of dimensions in the GloVe vectors.")

@@ -296,7 +296,7 @@ novice_personalized_surp_estimates_recipeflat_max = [item for sublist in novice_
 # In[16]:
 
 print 'Get the oracle surprise estimates by the model:'
-oracle_suprise_pickle_fn = cwd + '/GloVex/results/recipes_oracle/oracle_suprise_run4.pickle'
+oracle_suprise_pickle_fn = cwd + '/GloVex/results/recipes_oracle/oracle_suprise.pickle'
 oracle_suprise_dict = pickle.load(open(oracle_suprise_pickle_fn, 'rb'))
 
 
